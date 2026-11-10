@@ -4,7 +4,7 @@ Stable releases have a version number, raised only for notable changes. Smaller 
 the number and get a new build number. Each version needs its own section here before it can be
 released.
 
-## Unreleased
+## 0.1.1
 
 - Game APIs: player names and pings from the 7 Days to Die web API (plus its in-game clock), a reliable
   player list from Project Zomboid RCON, and player names from VEIN's HTTP API. The setup asks about them.
