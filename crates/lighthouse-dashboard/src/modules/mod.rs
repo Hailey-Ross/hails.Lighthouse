@@ -6,6 +6,7 @@ mod moderation;
 mod overview;
 mod reports;
 mod security;
+mod setup;
 mod uptime;
 mod users;
 
@@ -25,6 +26,7 @@ pub fn all() -> Vec<Box<dyn Module>> {
         Box::new(logs::Logs),
         Box::new(users::Users),
         Box::new(security::Security),
+        Box::new(setup::Setup),
     ]
 }
 

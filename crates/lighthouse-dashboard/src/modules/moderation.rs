@@ -330,7 +330,7 @@ fn parse_form(body: &str) -> ModForm {
     f
 }
 
-fn form_pairs(body: &str) -> Vec<(String, String)> {
+pub(crate) fn form_pairs(body: &str) -> Vec<(String, String)> {
     fn decode(s: &str) -> String {
         let bytes = s.as_bytes();
         let mut out = Vec::with_capacity(bytes.len());

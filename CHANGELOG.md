@@ -26,6 +26,9 @@ released.
 - Unlisted 7 Days to Die servers (which don't answer the status check) show correctly through the
   web API.
 - Project Zomboid's default status port is now the game port (16261), as on Build 42.
+- Setup page on the dashboard: add, change and remove game servers (with a Test button) and Discord
+  bots. A bot needs only its token: the page shows the invite link and lists the channels it can
+  post in. Saving checks the whole config, writes it and restarts Lighthouse.
 - `/status` slash command: the board, or one server's card picked from an autocomplete list, shown only to
   the person who asked.
 

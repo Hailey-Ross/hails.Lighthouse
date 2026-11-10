@@ -44,6 +44,8 @@ fn app() -> axum::Router {
         config,
         monitor,
         store: Arc::new(store),
+        config_path: None,
+        restart: None,
     }))
 }
 

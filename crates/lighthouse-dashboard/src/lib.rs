@@ -31,6 +31,10 @@ pub struct Context {
     pub config: Config,
     pub monitor: Arc<Monitor>,
     pub store: Arc<Store>,
+    /// The config file, for the Setup page. `None` disables saving.
+    pub config_path: Option<std::path::PathBuf>,
+    /// Restarts Lighthouse so a saved config takes effect. `None`: the page asks for a manual restart.
+    pub restart: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
 #[derive(Clone)]

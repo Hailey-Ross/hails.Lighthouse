@@ -469,6 +469,8 @@ async fn run(path: &Path) -> anyhow::Result<()> {
                 config: config.clone(),
                 monitor: Arc::clone(&monitor),
                 store: Arc::clone(&store),
+                config_path: Some(path.to_path_buf()),
+                restart: Some(Arc::new(|| update::restart())),
             });
             tokio::spawn(async move {
                 if let Err(e) = lighthouse_dashboard::serve(ctx, &bind).await {

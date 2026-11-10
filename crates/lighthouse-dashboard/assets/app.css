@@ -351,6 +351,13 @@ form.stack { display: flex; flex-direction: column; gap: .7rem; max-width: 760px
 .live-dot { width: .6rem; height: .6rem; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 4px color-mix(in srgb, var(--ok) 25%, transparent); }
 .live-dot.paused { background: var(--muted); box-shadow: none; }
 
+a.button { display: inline-block; font-weight: 700; color: var(--text); background: var(--glass-strong);
+  border: 1px solid var(--line); border-radius: 999px; padding: .58rem 1.25rem; margin: .2rem 0 1.4rem;
+  transition: border-color .22s ease, box-shadow .22s ease, transform .22s ease; }
+a.button:hover { border-color: var(--glow); box-shadow: 0 0 0 4px color-mix(in srgb, var(--glow) 22%, transparent); transform: translateY(-1px); text-decoration: none; }
+ol.steps { max-width: 760px; line-height: 1.7; }
+[hidden] { display: none !important; }
+
 /* ---------- users / invites / security ---------- */
 form.user-form { max-width: 760px; }
 .invite-link .inline input { flex: 1; min-width: min(100%, 360px); font: 13px/1.4 ui-monospace, Consolas, monospace; }

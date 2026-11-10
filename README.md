@@ -99,7 +99,9 @@ Off unless you turn it on (in the setup, or later with `lighthouse set-password`
 - **Servers** at a glance, **Uptime** (history and outages), **Reports** (players over time, peaks,
   player-hours, when people play, CSV export), **Controls** (start, stop, restart, messages),
   **Moderation** (who's online, kicks, bans, and txAdmin/game bans, warnings and restarts),
-  **Logs** (log files and a live console), **Users** and **Security**. Controls, moderation and the
+  **Logs** (log files and a live console), **Setup** (add and change game servers and Discord bots;
+  a bot needs only its token: the page shows its invite link and lets you pick its channel), **Users**
+  and **Security**. Controls, moderation and the
   live console need a game API or mod: see [docs/mods.md](docs/mods.md).
 - **Admins:** the superadmin from the setup invites others from the Users page and ticks exactly
   which pages and servers each one can see. Sign-up only works with an invite link; addresses that

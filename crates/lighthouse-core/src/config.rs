@@ -234,7 +234,7 @@ impl ServerConfig {
 }
 
 /// Game-specific interfaces Lighthouse can poll directly.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum NativeApi {
     /// 7 Days to Die built-in web API (tokens made with the `webtokens` console command).

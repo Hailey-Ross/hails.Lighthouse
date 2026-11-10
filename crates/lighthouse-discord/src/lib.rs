@@ -8,6 +8,7 @@ pub mod commands;
 pub mod monitor;
 pub mod persist;
 pub mod render;
+pub mod setup;
 
 use std::sync::Arc;
 
