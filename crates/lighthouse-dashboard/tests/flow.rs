@@ -223,13 +223,18 @@ async fn registration_needs_an_invite() {
     assert!(html.contains("expired or was already used") && !html.contains("name=\"password\""));
     let resp = app
         .clone()
-        .oneshot(req(
-            "POST",
-            "/register",
-            None,
-            Some(&format!(
-                "code={guess}&username=sneaky&password=password9&confirm=password9"
-            )),
+        // A different address, so the random block limit (2-5 wrong codes) can't kick in here;
+        // blocking has its own test below.
+        .oneshot(from(
+            req(
+                "POST",
+                "/register",
+                None,
+                Some(&format!(
+                    "code={guess}&username=sneaky&password=password9&confirm=password9"
+                )),
+            ),
+            [10, 9, 9, 9],
         ))
         .await
         .unwrap();
