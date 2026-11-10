@@ -73,6 +73,9 @@ pub struct BotConfig {
     pub token_env: Option<String>,
     /// Channel where the status board lives.
     pub status_channel_id: u64,
+    /// Heading of the combined board (one-bot-for-all-games mode), e.g. your community's name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
     /// Channel for up/down alerts. Alerts are only sent for servers with `alerts = true`.
     #[serde(default)]
     pub alert_channel_id: Option<u64>,

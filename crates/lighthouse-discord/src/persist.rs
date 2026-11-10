@@ -64,6 +64,11 @@ impl Persist {
         self.with(|d| d.messages.insert(key.to_string(), message), true);
     }
 
+    /// Ids of every post Lighthouse already keeps track of.
+    pub fn message_ids(&self) -> Vec<u64> {
+        self.with(|d| d.messages.values().map(|m| m.message_id).collect(), false)
+    }
+
     pub fn remove_message(&self, key: &str) {
         self.with(|d| d.messages.remove(key), true);
     }

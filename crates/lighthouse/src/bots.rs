@@ -261,6 +261,16 @@ pub async fn guided_bot(theme: &ColorfulTheme, game: Option<GameKind>) -> anyhow
         (None, None)
     };
 
+    let title = if game.is_none() {
+        let t: String = Input::with_theme(theme)
+            .with_prompt("Board title (for example your community's name)")
+            .default(lighthouse_discord::render::DEFAULT_TITLE.to_string())
+            .interact_text()?;
+        Some(t.trim().to_string()).filter(|t| !t.is_empty() && t != lighthouse_discord::render::DEFAULT_TITLE)
+    } else {
+        None
+    };
+
     let env_name = match game {
         Some(g) => format!("LIGHTHOUSE_{}_TOKEN", g.short_name()),
         None => "LIGHTHOUSE_TOKEN".to_string(),
@@ -287,6 +297,7 @@ pub async fn guided_bot(theme: &ColorfulTheme, game: Option<GameKind>) -> anyhow
         token: token_field,
         token_env,
         status_channel_id,
+        title,
         alert_channel_id,
         alert_role_id,
     })

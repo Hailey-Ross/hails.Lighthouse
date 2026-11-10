@@ -1,7 +1,15 @@
-//! Status cards as Discord Components V2 message bodies.
+//! Status posts as Discord Components V2 message bodies.
 //!
 //! Reference: <https://discord.com/developers/docs/components/reference>. A V2 message cannot also
 //! carry `content` or `embeds`, so everything goes into components.
+//!
+//! Layout, per server:
+//!
+//! ```text
+//! 🟢 **Athens PvE**
+//! **4** / 30 playing   ▰▱▱▱▱▱▱▱▱▱   up 2h 14m
+//! -# Day 591, 18:03 · Blood moon in 4 days · Join `203.0.113.10:26930`
+//! ```
 
 use lighthouse_core::{GameKind, ServerConfig, ServerState, ServerStatus};
 use serde_json::{Value, json};
@@ -13,15 +21,20 @@ const CONTAINER: u8 = 17;
 const TEXT_DISPLAY: u8 = 10;
 const SEPARATOR: u8 = 14;
 
-/// Discord caps the text across all components of a message at 4000 characters.
-const MAX_TEXT: usize = 4000;
-/// Room kept for everything on a card except the player list.
+/// Discord caps the text across all components of a message at 4000 characters; keep some room.
+const TEXT_BUDGET: usize = 3800;
+/// Discord allows 40 components per message (containers and their children all count).
+const COMPONENT_BUDGET: usize = 38;
+/// Room for the player list on a single-server card.
 const PLAYER_LIST_BUDGET: usize = 1500;
 
-pub const COLOR_ONLINE: u32 = 0x2ECC71;
-pub const COLOR_STARTING: u32 = 0xF1C40F;
-pub const COLOR_OFFLINE: u32 = 0xE74C3C;
-pub const COLOR_UNKNOWN: u32 = 0x95A5A6;
+pub const COLOR_ONLINE: u32 = 0x3C9B6C;
+pub const COLOR_STARTING: u32 = 0xD9A441;
+pub const COLOR_OFFLINE: u32 = 0xC95B5B;
+pub const COLOR_UNKNOWN: u32 = 0x8FA0A2;
+
+/// Board title when a bot doesn't set one.
+pub const DEFAULT_TITLE: &str = "Server status";
 
 fn state_color(state: ServerState) -> u32 {
     match state {
@@ -32,16 +45,16 @@ fn state_color(state: ServerState) -> u32 {
     }
 }
 
-fn state_label(state: ServerState) -> &'static str {
+fn dot(state: ServerState) -> &'static str {
     match state {
-        ServerState::Online => "🟢 **Online**",
-        ServerState::Starting => "🟡 **Starting**",
-        ServerState::Offline => "🔴 **Offline**",
-        ServerState::Unknown => "⚪ **Unknown**",
+        ServerState::Online => "🟢",
+        ServerState::Starting => "🟡",
+        ServerState::Offline => "🔴",
+        ServerState::Unknown => "⚪",
     }
 }
 
-/// `3d 4h`, `4h 12m`, `12m`. Short on purpose: it is refreshed on every update.
+/// `3d 4h`, `4h 12m`, `12m`, `~1m`. Short on purpose: it is refreshed on every update.
 pub fn format_uptime(secs: u64) -> String {
     let days = secs / 86_400;
     let hours = secs % 86_400 / 3_600;
@@ -50,9 +63,21 @@ pub fn format_uptime(secs: u64) -> String {
         format!("{days}d {hours}h")
     } else if hours > 0 {
         format!("{hours}h {mins}m")
-    } else {
+    } else if mins > 0 {
         format!("{mins}m")
+    } else {
+        "~1m".to_string()
     }
+}
+
+/// A ten-step capacity bar, e.g. `▰▰▰▱▱▱▱▱▱▱`. Any players at all show at least one step.
+pub fn capacity_bar(players: u32, max: u32) -> String {
+    const STEPS: u32 = 10;
+    let filled = match (players.min(max) * STEPS + max / 2).checked_div(max) {
+        Some(f) if players > 0 => f.max(1),
+        _ => 0,
+    };
+    "▰".repeat(filled as usize) + &"▱".repeat((STEPS - filled) as usize)
 }
 
 /// Strip characters that would break Discord markdown in names coming from game servers.
@@ -75,67 +100,96 @@ fn display_name(server: &ServerConfig, status: &ServerStatus) -> String {
         .unwrap_or_else(|| server.id.clone())
 }
 
-fn players_text(status: &ServerStatus) -> Option<String> {
-    match (status.players_online, status.players_max) {
-        (Some(n), Some(max)) => Some(format!("👥 {n}/{max} players")),
-        (Some(n), None) => Some(format!("👥 {n} players")),
-        _ => None,
-    }
+/// How much detail a server block carries.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Detail {
+    /// Single-server card: everything, including version and player names.
+    Full,
+    /// Board: game time, blood moon and join address.
+    Board,
+    /// Board that ran out of room: name, players and uptime only.
+    Brief,
 }
 
-/// The body lines of one server card (without the title).
-fn card_lines(server: &ServerConfig, status: &ServerStatus, now_unix: i64) -> Vec<String> {
+/// The server's lines, without its name line.
+fn server_body(server: &ServerConfig, status: &ServerStatus, now_unix: i64, detail: Detail) -> Vec<String> {
     let mut lines = Vec::new();
+    match status.state {
+        ServerState::Online | ServerState::Starting => {
+            let mut main = Vec::new();
+            match (status.players_online, status.players_max) {
+                (Some(n), Some(m)) => main.push(format!("**{n}** / {m} playing   {}", capacity_bar(n, m))),
+                (Some(n), None) => main.push(format!("**{n}** playing")),
+                _ if status.state == ServerState::Starting => main.push("Starting up".to_string()),
+                _ => main.push("Online".to_string()),
+            }
+            if let Some(up) = status.uptime_secs(now_unix) {
+                main.push(format!("up {}", format_uptime(up)));
+            }
+            lines.push(main.join("   "));
 
-    let mut head = vec![state_label(status.state).to_string()];
-    if status.state == ServerState::Online {
-        head.extend(players_text(status));
-        if let Some(up) = status.uptime_secs(now_unix) {
-            head.push(format!("⏱️ up {}", format_uptime(up)));
+            if detail != Detail::Brief {
+                let mut sub = Vec::new();
+                if detail == Detail::Full
+                    && let Some(map) = &status.map
+                {
+                    sub.push(escape(map));
+                }
+                if let Some(t) = status.game_time {
+                    sub.push(format!("Day {}, {:02}:{:02}", t.day, t.hour, t.minute));
+                }
+                if let Some(days) = status.blood_moon_in_days {
+                    sub.push(match days {
+                        0 => "🩸 Blood moon tonight".to_string(),
+                        1 => "Blood moon tomorrow".to_string(),
+                        n => format!("Blood moon in {n} days"),
+                    });
+                }
+                if detail == Detail::Full
+                    && let Some(v) = &status.version
+                {
+                    sub.push(format!("Version {}", escape(v)));
+                }
+                if server.show_address {
+                    sub.push(format!("Join `{}:{}`", server.host, server.game_port));
+                }
+                if !sub.is_empty() {
+                    lines.push(format!("-# {}", sub.join(" · ")));
+                }
+                if detail == Detail::Full && server.show_players && !status.players.is_empty() {
+                    lines.push(player_list(status));
+                }
+            }
         }
-        if let Some(ping) = status.ping_ms {
-            head.push(format!("{ping} ms"));
+        ServerState::Offline => {
+            lines.push(format!(
+                "Offline · not answering since <t:{}:R>",
+                status.observed_at_unix
+            ));
+            if server.show_address && detail != Detail::Brief {
+                lines.push(format!("-# Join `{}:{}`", server.host, server.game_port));
+            }
         }
-    }
-    lines.push(head.join(" · "));
-
-    if status.state == ServerState::Online {
-        let mut info = Vec::new();
-        if let Some(map) = &status.map {
-            info.push(format!("🗺️ {}", escape(map)));
-        }
-        if let Some(t) = status.game_time {
-            info.push(format!("Day {}, {:02}:{:02}", t.day, t.hour, t.minute));
-        }
-        if let Some(days) = status.blood_moon_in_days {
-            info.push(match days {
-                0 => "🩸 Blood moon tonight".to_string(),
-                1 => "🩸 Blood moon tomorrow".to_string(),
-                n => format!("🩸 Blood moon in {n} days"),
-            });
-        }
-        if status.password_protected == Some(true) {
-            info.push("🔒 Password".to_string());
-        }
-        if !info.is_empty() {
-            lines.push(info.join(" · "));
-        }
-        if let Some(v) = &status.version {
-            lines.push(format!("-# Version {}", escape(v)));
-        }
-        if server.show_players && !status.players.is_empty() {
-            lines.push(player_list(status));
-        }
-    }
-
-    if server.show_address {
-        lines.push(format!("Join: `{}:{}`", server.host, server.game_port));
+        ServerState::Unknown => lines.push("Checking…".to_string()),
     }
     lines
 }
 
+fn name_line(server: &ServerConfig, status: &ServerStatus) -> String {
+    let lock = if status.password_protected == Some(true) {
+        "  🔒"
+    } else {
+        ""
+    };
+    format!(
+        "{} **{}**{lock}",
+        dot(status.state),
+        escape(&display_name(server, status))
+    )
+}
+
 fn player_list(status: &ServerStatus) -> String {
-    let mut out = String::from("**Players:** ");
+    let mut out = String::from("-# Playing: ");
     let total = status.players.len();
     for (i, p) in status.players.iter().enumerate() {
         let name = escape(&p.name);
@@ -155,15 +209,38 @@ fn text(content: String) -> Value {
     json!({ "type": TEXT_DISPLAY, "content": content })
 }
 
+fn spacer() -> Value {
+    json!({ "type": SEPARATOR, "divider": false, "spacing": 1 })
+}
+
 fn updated_footer(now_unix: i64) -> Value {
     // <t:..:R> renders as "2 minutes ago" in each viewer's own locale.
     text(format!("-# Updated <t:{now_unix}:R>"))
 }
 
-/// One message per server: the per-game bot layout.
+/// `3 of 3 online · 4 playing`
+fn summary(statuses: &[&ServerStatus]) -> String {
+    let up: Vec<&&ServerStatus> = statuses.iter().filter(|s| s.state == ServerState::Online).collect();
+    let players: u32 = up.iter().filter_map(|s| s.players_online).sum();
+    let playing = match players {
+        0 => "nobody playing".to_string(),
+        n => format!("{n} playing"),
+    };
+    format!("{} of {} online · {playing}", up.len(), statuses.len())
+}
+
+/// Text that identifies a post when Lighthouse has lost track of it (see `Bot::find_own_post`):
+/// a server card carries the server's name in bold; a board starts with a `## ` title.
+pub fn card_marker(server: &ServerConfig, status: &ServerStatus) -> String {
+    format!("**{}**", escape(&display_name(server, status)))
+}
+
+pub const BOARD_MARKER: &str = "## ";
+
+/// One message per server: the one-bot-per-game layout.
 pub fn server_card(server: &ServerConfig, status: &ServerStatus, now_unix: i64) -> Value {
-    let title = format!("### {}", escape(&display_name(server, status)));
-    let body = card_lines(server, status, now_unix).join("\n");
+    let title = format!("### {}", name_line(server, status));
+    let body = server_body(server, status, now_unix, Detail::Full).join("\n");
     json!({
         "flags": IS_COMPONENTS_V2,
         "components": [{
@@ -179,67 +256,93 @@ pub fn server_card(server: &ServerConfig, status: &ServerStatus, now_unix: i64) 
     })
 }
 
-/// One compact line per server, e.g. `🟢 **PvE Main** · 👥 12/40 · ⏱️ up 3h 2m`.
-fn compact_line(server: &ServerConfig, status: &ServerStatus, now_unix: i64) -> String {
-    let mut parts = vec![format!(
-        "{} **{}**",
-        state_label(status.state).split(' ').next().unwrap_or(""),
-        escape(&display_name(server, status))
-    )];
-    if status.state == ServerState::Online {
-        if let (Some(n), Some(max)) = (status.players_online, status.players_max) {
-            parts.push(format!("👥 {n}/{max}"));
-        }
-        if let Some(up) = status.uptime_secs(now_unix) {
-            parts.push(format!("⏱️ up {}", format_uptime(up)));
+/// One board for many servers, grouped by game: the one-bot-for-all-games layout.
+pub fn compact_board(entries: &[(&ServerConfig, &ServerStatus)], now_unix: i64, title: &str) -> Value {
+    for detail in [Detail::Board, Detail::Brief] {
+        let board = build_board(entries, now_unix, title, detail, 0);
+        if text_len(&board) <= TEXT_BUDGET {
+            return board;
         }
     }
-    if server.show_address {
-        parts.push(format!("`{}:{}`", server.host, server.game_port));
+    // Still too long: show as many servers as fit, and say how many are left out.
+    let mut shown = entries.len();
+    while shown > 1 {
+        shown -= 1;
+        let board = build_board(&entries[..shown], now_unix, title, Detail::Brief, entries.len() - shown);
+        if text_len(&board) <= TEXT_BUDGET {
+            return board;
+        }
     }
-    parts.join(" · ")
+    build_board(&entries[..1], now_unix, title, Detail::Brief, entries.len() - 1)
 }
 
-/// A single compact board grouped by game: the megabot layout, also usable as an overview message.
-pub fn compact_board(entries: &[(&ServerConfig, &ServerStatus)], now_unix: i64) -> Value {
+fn build_board(
+    entries: &[(&ServerConfig, &ServerStatus)],
+    now_unix: i64,
+    title: &str,
+    detail: Detail,
+    hidden: usize,
+) -> Value {
     let mut games: Vec<GameKind> = entries.iter().map(|(s, _)| s.game).collect();
     games.sort();
     games.dedup();
 
-    let mut containers = Vec::new();
+    let all: Vec<&ServerStatus> = entries.iter().map(|(_, st)| *st).collect();
+    let mut components = vec![text(format!("## {}\n-# {}", escape(title), summary(&all)))];
+
+    // One text block per server reads best; past the component limit, a game's servers share one.
+    let separate = entries.len() * 2 + games.len() * 2 + 2 <= COMPONENT_BUDGET;
     for game in games {
-        let in_game: Vec<_> = entries.iter().filter(|(s, _)| s.game == game).collect();
-        let up = in_game.iter().filter(|(_, st)| st.state == ServerState::Online).count();
-        let color = if up == in_game.len() {
+        let in_game: Vec<&(&ServerConfig, &ServerStatus)> = entries.iter().filter(|(s, _)| s.game == game).collect();
+        let statuses: Vec<&ServerStatus> = in_game.iter().map(|(_, st)| *st).collect();
+        let up = statuses.iter().filter(|s| s.state == ServerState::Online).count();
+        let color = if up == statuses.len() {
             COLOR_ONLINE
         } else if up == 0 {
             COLOR_OFFLINE
         } else {
             COLOR_STARTING
         };
-        let lines: Vec<String> = in_game.iter().map(|(s, st)| compact_line(s, st, now_unix)).collect();
-        containers.push(json!({
-            "type": CONTAINER,
-            "accent_color": color,
-            "components": [
-                text(format!("### {game} · {up}/{} up", in_game.len())),
-                text(truncate(&lines.join("\n"), MAX_TEXT / 4)),
-            ],
-        }));
+        let mut inner = vec![text(format!("### {game}\n-# {}", summary(&statuses)))];
+        let blocks: Vec<String> = in_game
+            .iter()
+            .map(|(s, st)| {
+                let mut lines = vec![name_line(s, st)];
+                lines.extend(server_body(s, st, now_unix, detail));
+                lines.join("\n")
+            })
+            .collect();
+        if separate {
+            for b in blocks {
+                inner.push(spacer());
+                inner.push(text(b));
+            }
+        } else {
+            inner.push(text(blocks.join("\n\n")));
+        }
+        components.push(json!({ "type": CONTAINER, "accent_color": color, "components": inner }));
     }
-    containers.push(updated_footer(now_unix));
-    json!({ "flags": IS_COMPONENTS_V2, "components": containers })
+    if hidden > 0 {
+        components.push(text(format!(
+            "-# +{hidden} more servers not shown (Discord allows 4000 characters per post)"
+        )));
+    }
+    components.push(updated_footer(now_unix));
+    json!({ "flags": IS_COMPONENTS_V2, "components": components })
 }
 
-fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max {
-        return s.to_string();
+/// Total characters of text across a message's components (Discord counts characters, not bytes).
+fn text_len(v: &Value) -> usize {
+    match v {
+        Value::Object(map) => {
+            map.get("content")
+                .and_then(Value::as_str)
+                .map_or(0, |t| t.chars().count())
+                + map.values().map(text_len).sum::<usize>()
+        }
+        Value::Array(items) => items.iter().map(text_len).sum(),
+        _ => 0,
     }
-    let mut end = max.saturating_sub(1);
-    while !s.is_char_boundary(end) {
-        end -= 1;
-    }
-    format!("{}…", &s[..end])
 }
 
 /// A copy of a rendered message without its "Updated …" footer, for deciding whether an edit is
@@ -414,8 +517,40 @@ mod tests {
     }
 
     #[test]
+    fn capacity_bars() {
+        assert_eq!(capacity_bar(0, 30), "▱▱▱▱▱▱▱▱▱▱");
+        assert_eq!(capacity_bar(1, 30), "▰▱▱▱▱▱▱▱▱▱", "any players show one step");
+        assert_eq!(capacity_bar(15, 30), "▰▰▰▰▰▱▱▱▱▱");
+        assert_eq!(capacity_bar(40, 30), "▰▰▰▰▰▰▰▰▰▰");
+        assert_eq!(capacity_bar(3, 0), "▱▱▱▱▱▱▱▱▱▱");
+    }
+
+    #[test]
+    fn big_boards_stay_inside_discord_limits() {
+        let servers: Vec<ServerConfig> = (0..40)
+            .map(|i| {
+                let mut s = server();
+                s.id = format!("s{i}");
+                s.name = Some(format!("A rather long server name number {i}"));
+                s
+            })
+            .collect();
+        let status = online();
+        let entries: Vec<(&ServerConfig, &ServerStatus)> = servers.iter().map(|s| (s, &status)).collect();
+        let v = compact_board(&entries, 10_000, DEFAULT_TITLE);
+        fn count(v: &Value) -> usize {
+            v.get("components")
+                .and_then(Value::as_array)
+                .map_or(0, |c| c.len() + c.iter().map(count).sum::<usize>())
+        }
+        assert!(count(&v) <= 40, "{} components", count(&v));
+        assert!(text_len(&v) <= 4000, "{} characters", text_len(&v));
+    }
+
+    #[test]
     fn uptime_formatting() {
-        assert_eq!(format_uptime(59), "0m");
+        assert_eq!(format_uptime(59), "~1m");
+        assert_eq!(format_uptime(61), "1m");
         assert_eq!(format_uptime(3 * 3600 + 120), "3h 2m");
         assert_eq!(format_uptime(2 * 86_400 + 5 * 3600), "2d 5h");
     }
@@ -427,7 +562,7 @@ mod tests {
         let container = &v["components"][0];
         assert_eq!(container["accent_color"], COLOR_ONLINE);
         let body = container["components"][1]["content"].as_str().unwrap();
-        assert!(body.contains("2/8 players"), "{body}");
+        assert!(body.contains("**2** / 8 playing   ▰▰▰▱▱▱▱▱▱▱"), "{body}");
         assert!(body.contains("up 3h 2m"), "{body}");
         assert!(body.contains("Blood moon tonight"), "{body}");
         assert!(body.contains(r"a\_b, c"), "{body}");
@@ -451,10 +586,19 @@ mod tests {
         b.id = "pz".into();
         b.game = GameKind::get(GameKind::PROJECT_ZOMBOID);
         let (sa, sb) = (online(), ServerStatus::offline(0));
-        let v = compact_board(&[(&a, &sa), (&b, &sb)], 10_000);
+        let v = compact_board(&[(&a, &sa), (&b, &sb)], 10_000, "Our servers");
         let comps = v["components"].as_array().unwrap();
-        assert_eq!(comps.len(), 3); // two game containers + footer
-        assert_eq!(comps[0]["accent_color"], COLOR_ONLINE);
-        assert_eq!(comps[1]["accent_color"], COLOR_OFFLINE);
+        assert_eq!(comps.len(), 4); // title, two game containers, footer
+        assert_eq!(comps[0]["content"], "## Our servers\n-# 1 of 2 online · 2 playing");
+        assert_eq!(comps[1]["accent_color"], COLOR_ONLINE);
+        assert_eq!(comps[2]["accent_color"], COLOR_OFFLINE);
+        let athens = comps[1]["components"][2]["content"].as_str().unwrap();
+        assert!(athens.starts_with("🟢 **PvE Main**\n**2** / 8 playing"), "{athens}");
+        assert!(
+            athens.contains("-# Day 14, 21:05 · 🩸 Blood moon tonight · Join `203.0.113.5:26900`"),
+            "{athens}"
+        );
+        let pz = comps[2]["components"][2]["content"].as_str().unwrap();
+        assert!(pz.contains("Offline · not answering since <t:0:R>"), "{pz}");
     }
 }

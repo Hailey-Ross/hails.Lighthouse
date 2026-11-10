@@ -54,6 +54,7 @@ pub fn start_bots(config: &Config, monitor: &Arc<monitor::Monitor>, persist: &Ar
             config.mode
         };
         let bot = Bot {
+            user_id: Default::default(),
             key,
             config: bot_config.clone(),
             token,

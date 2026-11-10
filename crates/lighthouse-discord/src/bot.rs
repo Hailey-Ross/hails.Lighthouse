@@ -17,7 +17,7 @@ use twilight_http::error::ErrorType;
 use twilight_model::gateway::payload::outgoing::update_presence::{UpdatePresence, UpdatePresencePayload};
 use twilight_model::gateway::presence::{Activity, ActivityType, MinimalActivity, Status};
 use twilight_model::id::Id;
-use twilight_model::id::marker::ChannelMarker;
+use twilight_model::id::marker::{ChannelMarker, MessageMarker};
 
 use crate::monitor::{Monitor, Transition};
 use crate::now_unix;
@@ -46,6 +46,8 @@ pub struct Bot {
     pub token: String,
     pub mode: BotMode,
     pub servers: Vec<ServerConfig>,
+    /// The bot's own user id, learned at start-up (used to recognise its earlier posts).
+    pub user_id: std::sync::OnceLock<u64>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -90,7 +92,10 @@ impl Bot {
 
         match http.current_user().await {
             Ok(resp) => match resp.model().await {
-                Ok(user) => info!(bot = %self.key, "logged in as {}", user.name),
+                Ok(user) => {
+                    info!(bot = %self.key, "logged in as {}", user.name);
+                    let _ = self.user_id.set(user.id.get());
+                }
                 Err(e) => warn!(bot = %self.key, "could not read bot user: {e}"),
             },
             Err(e) if matches!(e.kind(), ErrorType::Unauthorized) => {
@@ -146,23 +151,33 @@ impl Bot {
                 .collect();
 
             // Build the messages this bot owns: one per server, or one compact board.
-            let mut messages: Vec<(String, Value)> = Vec::new();
+            // (state key, message body, text that identifies the post if its id was lost)
+            let mut messages: Vec<(String, Value, String)> = Vec::new();
             match self.mode {
                 BotMode::PerGame => {
                     for (server, status) in &statuses {
                         messages.push((
                             format!("{}/{}", self.key, server.id),
                             render::server_card(server, status, now),
+                            render::card_marker(server, status),
                         ));
                     }
                 }
                 BotMode::Mega => {
                     let entries: Vec<_> = statuses.iter().map(|(s, st)| (*s, st)).collect();
-                    messages.push((format!("{}/board", self.key), render::compact_board(&entries, now)));
+                    messages.push((
+                        format!("{}/board", self.key),
+                        render::compact_board(
+                            &entries,
+                            now,
+                            self.config.title.as_deref().unwrap_or(render::DEFAULT_TITLE),
+                        ),
+                        render::BOARD_MARKER.to_string(),
+                    ));
                 }
             }
 
-            for (key, body) in messages {
+            for (key, body, marker) in messages {
                 let cmp = render::comparable(&body);
                 let fresh = posted
                     .get(&key)
@@ -170,7 +185,7 @@ impl Bot {
                 if fresh {
                     continue;
                 }
-                match self.upsert(&http, &persist, &key, channel, &body).await {
+                match self.upsert(&http, &persist, &key, channel, &body, &marker).await {
                     Ok(()) => {
                         posted.insert(key, (cmp, Instant::now()));
                     }
@@ -241,7 +256,46 @@ impl Bot {
         }
     }
 
-    /// Edit the remembered message, or post a new one if there is none (or it was deleted).
+    /// Look through the channel's recent messages for this bot's own earlier post carrying
+    /// `marker`, for when its id was lost (e.g. the state file was deleted or moved).
+    async fn find_own_post(
+        &self,
+        http: &Client,
+        persist: &Persist,
+        channel: Id<ChannelMarker>,
+        marker: &str,
+    ) -> Option<Id<MessageMarker>> {
+        let me = *self.user_id.get()?;
+        let recent = http
+            .channel_messages(channel)
+            .limit(50)
+            .await
+            .ok()?
+            .models()
+            .await
+            .ok()?;
+        let claimed = persist.message_ids();
+        // Match inside the JSON of the post's components, so encode the marker the same way.
+        let needle = serde_json::to_string(marker).ok()?;
+        let needle = needle.trim_matches('"');
+        let needle = if marker == render::BOARD_MARKER {
+            format!("\"content\":\"{needle}")
+        } else {
+            needle.to_string()
+        };
+        // Newest first: if there are several, the latest is the one people see.
+        recent
+            .into_iter()
+            .find(|m| {
+                m.author.id.get() == me
+                    && !claimed.contains(&m.id.get())
+                    && serde_json::to_string(&m.components).is_ok_and(|c| c.contains(&needle))
+            })
+            .map(|m| m.id)
+    }
+
+    /// Edit this post's message: the remembered one, or the bot's own earlier post found in the
+    /// channel; post a new one only if there is neither (or it was deleted).
     async fn upsert(
         &self,
         http: &Client,
@@ -249,8 +303,21 @@ impl Bot {
         key: &str,
         channel: Id<ChannelMarker>,
         body: &Value,
+        marker: &str,
     ) -> Result<(), SendError> {
         let payload = serde_json::to_vec(body).expect("JSON values always serialise");
+        if persist.message(key).filter(|m| m.channel_id == channel.get()).is_none()
+            && let Some(found) = self.find_own_post(http, persist, channel, marker).await
+        {
+            info!(bot = %self.key, "{key}: found its earlier post {found}, updating it");
+            persist.set_message(
+                key,
+                MessageRef {
+                    channel_id: channel.get(),
+                    message_id: found.get(),
+                },
+            );
+        }
         if let Some(existing) = persist.message(key).filter(|m| m.channel_id == channel.get())
             && let Some(message_id) = Id::new_checked(existing.message_id)
         {

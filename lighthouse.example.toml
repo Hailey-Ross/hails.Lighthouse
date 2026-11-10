@@ -29,6 +29,7 @@ game = "7dtd"                        # the game this bot posts for (leave out in
 token_env = "LIGHTHOUSE_7DTD_TOKEN"  # read the token from this environment variable...
 # token = "paste-the-bot-token-here" # ...or put it here directly (then keep this file private)
 status_channel_id = 123456789012345678
+# title = "Our servers"              # heading of the combined board (one bot for all games)
 # Optional alerts when a server goes down or comes back (only for servers with alerts = true):
 # alert_channel_id = 123456789012345678
 # alert_role_id = 123456789012345678 # role to ping with each alert
