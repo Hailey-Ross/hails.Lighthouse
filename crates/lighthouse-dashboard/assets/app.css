@@ -331,6 +331,26 @@ pre.log { background: #0d1718; color: #d8e3e3; border-radius: 22px; padding: 1.1
 pre.log mark { background: color-mix(in srgb, var(--glow) 60%, transparent); color: #fff; border-radius: 4px; padding: 0 2px; }
 pre.example { background: var(--glass-strong); padding: .9rem 1.1rem; border-radius: 14px; overflow-x: auto; }
 
+/* ---------- controls / moderation ---------- */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 1.1rem; margin-bottom: 1.4rem; }
+.card { background: var(--glass); border: 1px solid var(--glass-line); box-shadow: var(--shadow); border-radius: 22px;
+  padding: 1.1rem 1.25rem; margin-bottom: 1.1rem; min-width: 0; }
+.cards .card { margin-bottom: 0; }
+.card h3 { margin: 0 0 .35rem; font-size: 1.1rem; overflow-wrap: anywhere; }
+.card .inline { margin-bottom: .6rem; }
+.card form.inline input[name="message"] { flex: 1; min-width: 180px; }
+.actions { display: flex; gap: .6rem; flex-wrap: wrap; margin: .6rem 0; }
+.actions form { margin: 0; }
+.pill.good { color: var(--ok); background: color-mix(in srgb, var(--ok) 16%, transparent); }
+tr.faded { opacity: .55; }
+details.inline-action summary { cursor: pointer; font-weight: 650; color: var(--brand); }
+details.inline-action form { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-top: .5rem; }
+details.inline-action input[name="reason"] { min-width: 200px; flex: 1; }
+form.stack { display: flex; flex-direction: column; gap: .7rem; max-width: 760px; margin-bottom: 1.4rem; }
+.live-bar { display: flex; gap: .7rem; align-items: center; flex-wrap: wrap; margin-bottom: .8rem; }
+.live-dot { width: .6rem; height: .6rem; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 4px color-mix(in srgb, var(--ok) 25%, transparent); }
+.live-dot.paused { background: var(--muted); box-shadow: none; }
+
 /* ---------- users / invites / security ---------- */
 form.user-form { max-width: 760px; }
 .invite-link .inline input { flex: 1; min-width: min(100%, 360px); font: 13px/1.4 ui-monospace, Consolas, monospace; }

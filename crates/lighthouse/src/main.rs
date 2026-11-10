@@ -1,5 +1,6 @@
 mod bots;
 mod http;
+mod ingest;
 mod password;
 mod setup;
 mod update;
@@ -62,6 +63,25 @@ enum Command {
     Unblock {
         /// The blocked IP address.
         ip: String,
+    },
+    /// Control a configured server: start, stop, restart, say, kick or ban.
+    ///
+    /// Works through the server's control commands, 7 Days to Die telnet or Project Zomboid RCON.
+    /// Actions that go through a game mod need the running Lighthouse; use the dashboard for those.
+    Control {
+        /// The server's id in the config file.
+        server: String,
+        /// start, stop, restart, say, kick or ban.
+        action: String,
+        /// Message for `say`; reason for `kick` and `ban`.
+        #[arg(long, short)]
+        message: Option<String>,
+        /// Player for `kick` and `ban` (name, or the game's player id).
+        #[arg(long, short)]
+        player: Option<String>,
+        /// Ban length in minutes (default: permanent).
+        #[arg(long)]
+        minutes: Option<i64>,
     },
     /// List the games Lighthouse knows, with their default ports.
     Games {
@@ -142,6 +162,10 @@ async fn prune_history(store: Arc<lighthouse_store::Store>) {
     let mut every = tokio::time::interval(std::time::Duration::from_secs(3600));
     loop {
         every.tick().await;
+        // Server events: 30 days, bans/kicks/warns a year.
+        if let Err(e) = store.prune_events(now_unix() - 30 * 86_400, now_unix() - 365 * 86_400) {
+            tracing::warn!("could not prune server events: {e}");
+        }
         match store.prune_history(now_unix() - 30 * 86_400) {
             Ok(0) => {}
             Ok(n) => {
@@ -271,6 +295,10 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
                 alerts: false,
                 native: None,
                 log_dir: None,
+                control: None,
+                process: None,
+                status_file: None,
+                telnet: None,
             };
             let now = now_unix();
             let status = lighthouse_games::adapter_for(game).query(&server, now).await?;
@@ -279,6 +307,39 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
                 let card = lighthouse_discord::render::server_card(&server, &status, now);
                 println!("{}", serde_json::to_string_pretty(&card)?);
             }
+            Ok(())
+        }
+        Command::Control {
+            server,
+            action,
+            message,
+            player,
+            minutes,
+        } => {
+            let config = load(&path)?;
+            let server = config
+                .servers
+                .iter()
+                .find(|s| s.id == server)
+                .ok_or_else(|| anyhow::anyhow!("no server with id {server:?} in {}", path.display()))?;
+            let action = if action == "ban" {
+                let player = player.ok_or_else(|| anyhow::anyhow!("ban needs --player"))?;
+                lighthouse_core::ControlAction::Ban {
+                    player,
+                    reason: message.unwrap_or_else(|| "Banned by an admin".to_string()),
+                    duration_secs: minutes.map(|m| m * 60),
+                }
+            } else {
+                lighthouse_core::ControlAction::from_key(&action, message, player).ok_or_else(|| {
+                    anyhow::anyhow!("unknown action {action:?}, or it is missing --message / --player")
+                })?
+            };
+            // No running Lighthouse here, so no mods are connected: only local commands and consoles.
+            let relay = lighthouse_core::Relay::default();
+            let done = lighthouse_games::control::perform(server, action, &relay, now_unix())
+                .await
+                .map_err(|e| anyhow::anyhow!(e))?;
+            println!("{done}");
             Ok(())
         }
         Command::Unblock { ip } => {
@@ -374,7 +435,21 @@ async fn run(path: &Path) -> anyhow::Result<()> {
     tokio::spawn(prune_history(Arc::clone(&store)));
 
     let persist = Arc::new(lighthouse_discord::persist::Persist::load(&state_file(path)));
-    let monitor = lighthouse_discord::monitor::Monitor::new(&config.servers, Some(recorder));
+    let relay = Arc::new(lighthouse_core::Relay::default());
+    let monitor = lighthouse_discord::monitor::Monitor::new(&config.servers, Some(recorder), Arc::clone(&relay));
+    if let Some(ingest) = &config.ingest {
+        let bind = ingest.bind.clone();
+        let ingest = Arc::new(ingest::Ingest {
+            config: config.clone(),
+            relay: Arc::clone(&relay),
+            store: Arc::clone(&store),
+        });
+        tokio::spawn(async move {
+            if let Err(e) = ingest::serve(ingest, &bind).await {
+                error!("heartbeat listener stopped: {e} (is {bind} already in use?)");
+            }
+        });
+    }
     monitor.spawn_pollers(
         config.servers.clone(),
         std::time::Duration::from_secs(config.poll_interval_secs),

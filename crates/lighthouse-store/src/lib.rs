@@ -9,7 +9,7 @@ use std::sync::Mutex;
 
 use argon2::Argon2;
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
-use lighthouse_core::{ServerState, ServerStatus};
+use lighthouse_core::{Ban, ServerEvent, ServerState, ServerStatus};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 
@@ -70,6 +70,33 @@ const MIGRATIONS: &[&str] = &[
         blocked_until INTEGER,
         permanent     INTEGER NOT NULL DEFAULT 0,
         last_failure  INTEGER NOT NULL
+    );",
+    // 4: what happened on game servers (bans, kicks, restarts, controls used from Lighthouse),
+    //    and bans issued from Lighthouse
+    "CREATE TABLE server_events (
+        id           INTEGER PRIMARY KEY,
+        server_id    TEXT NOT NULL,
+        at           INTEGER NOT NULL,
+        kind         TEXT NOT NULL,
+        player       TEXT,
+        author       TEXT,
+        reason       TEXT,
+        action_id    TEXT,
+        expires_at   INTEGER,
+        ids          TEXT
+    );
+    CREATE INDEX server_events_by_time ON server_events (server_id, at);
+    CREATE TABLE bans (
+        id           INTEGER PRIMARY KEY,
+        server_id    TEXT,
+        player       TEXT,
+        ids          TEXT NOT NULL,
+        reason       TEXT NOT NULL,
+        author       TEXT NOT NULL,
+        created_at   INTEGER NOT NULL,
+        expires_at   INTEGER,
+        revoked_at   INTEGER,
+        revoked_by   TEXT
     );",
 ];
 
@@ -685,6 +712,186 @@ impl Store {
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
+    // ---------- server events ----------
+
+    /// Save events for a server. Events without a time get `now`.
+    pub fn add_events(&self, server_id: &str, events: &[ServerEvent], now: i64) -> Result<()> {
+        if events.is_empty() {
+            return Ok(());
+        }
+        let mut db = self.db();
+        let tx = db.transaction()?;
+        {
+            let mut stmt = tx.prepare(
+                "INSERT INTO server_events (server_id, at, kind, player, author, reason, action_id, expires_at, ids)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            )?;
+            for e in events {
+                let ids = (!e.ids.is_empty()).then(|| e.ids.join("\n"));
+                stmt.execute(params![
+                    server_id,
+                    e.at_unix.unwrap_or(now),
+                    e.kind,
+                    e.player,
+                    e.author,
+                    e.reason,
+                    e.action_id,
+                    e.expires_unix,
+                    ids
+                ])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// The newest events (at most `limit`) for the given servers, newest first, optionally only
+    /// some kinds.
+    pub fn events(&self, server_ids: &[&str], kinds: Option<&[&str]>, limit: usize) -> Result<Vec<StoredEvent>> {
+        if server_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let db = self.db();
+        let marks = |n: usize, from: usize| (from..from + n).map(|i| format!("?{i}")).collect::<Vec<_>>().join(",");
+        let mut sql = format!(
+            "SELECT id, server_id, at, kind, player, author, reason, action_id, expires_at, ids FROM server_events
+             WHERE server_id IN ({})",
+            marks(server_ids.len(), 1)
+        );
+        let mut args: Vec<&dyn rusqlite::ToSql> = server_ids.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
+        if let Some(kinds) = kinds {
+            sql.push_str(&format!(" AND kind IN ({})", marks(kinds.len(), args.len() + 1)));
+            args.extend(kinds.iter().map(|k| k as &dyn rusqlite::ToSql));
+        }
+        let limit = limit as i64;
+        sql.push_str(&format!(" ORDER BY at DESC, id DESC LIMIT ?{}", args.len() + 1));
+        args.push(&limit);
+        let mut stmt = db.prepare(&sql)?;
+        let rows = stmt.query_map(args.as_slice(), |r| {
+            Ok(StoredEvent {
+                id: r.get(0)?,
+                server_id: r.get(1)?,
+                event: ServerEvent {
+                    at_unix: Some(r.get(2)?),
+                    kind: r.get(3)?,
+                    player: r.get(4)?,
+                    author: r.get(5)?,
+                    reason: r.get(6)?,
+                    action_id: r.get(7)?,
+                    expires_unix: r.get(8)?,
+                    ids: split_ids(r.get(9)?),
+                },
+            })
+        })?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    /// Action ids of bans and warns that were later revoked, among the given servers.
+    pub fn revoked_actions(&self, server_ids: &[&str]) -> Result<BTreeSet<String>> {
+        Ok(self
+            .events(server_ids, Some(&["revoke"]), 10_000)?
+            .into_iter()
+            .filter_map(|e| e.event.action_id)
+            .collect())
+    }
+
+    /// Delete events older than `before`, except moderation events (kept until `moderation_before`).
+    pub fn prune_events(&self, before: i64, moderation_before: i64) -> Result<usize> {
+        Ok(self.db().execute(
+            "DELETE FROM server_events
+             WHERE (at < ?1 AND kind NOT IN ('ban', 'warn', 'kick', 'revoke')) OR at < ?2",
+            params![before, moderation_before],
+        )?)
+    }
+
+    // ---------- Lighthouse bans ----------
+
+    /// Issue a ban. `server_id = None` applies it to every server that enforces Lighthouse bans.
+    pub fn add_ban(&self, server_id: Option<&str>, ban: &NewBan) -> Result<i64> {
+        if ban.ids.iter().all(|i| i.trim().is_empty()) {
+            return Err(StoreError::Invalid("a ban needs at least one player identifier".into()));
+        }
+        let db = self.db();
+        db.execute(
+            "INSERT INTO bans (server_id, player, ids, reason, author, created_at, expires_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                server_id,
+                ban.player,
+                ban.ids.join("\n"),
+                ban.reason,
+                ban.author,
+                ban.created_unix,
+                ban.expires_unix
+            ],
+        )?;
+        Ok(db.last_insert_rowid())
+    }
+
+    /// Lift a ban. Returns false if it doesn't exist or was already lifted.
+    pub fn revoke_ban(&self, id: i64, by: &str, now: i64) -> Result<bool> {
+        Ok(self.db().execute(
+            "UPDATE bans SET revoked_at = ?2, revoked_by = ?3 WHERE id = ?1 AND revoked_at IS NULL",
+            params![id, now, by],
+        )? > 0)
+    }
+
+    /// Every ban (newest first) for the given servers, including network-wide ones.
+    pub fn bans(&self, server_ids: &[&str], limit: usize) -> Result<Vec<BanRecord>> {
+        let db = self.db();
+        let mut stmt = db.prepare(
+            "SELECT id, server_id, player, ids, reason, author, created_at, expires_at, revoked_at, revoked_by
+             FROM bans ORDER BY created_at DESC, id DESC",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok(BanRecord {
+                server_id: r.get(1)?,
+                ban: Ban {
+                    id: r.get(0)?,
+                    player: r.get(2)?,
+                    ids: split_ids(r.get(3)?),
+                    reason: r.get(4)?,
+                    author: r.get(5)?,
+                    created_unix: r.get(6)?,
+                    expires_unix: r.get(7)?,
+                },
+                revoked_unix: r.get(8)?,
+                revoked_by: r.get(9)?,
+            })
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            let row = row?;
+            if row.server_id.as_deref().is_none_or(|s| server_ids.contains(&s)) {
+                out.push(row);
+                if out.len() >= limit {
+                    break;
+                }
+            }
+        }
+        Ok(out)
+    }
+
+    /// Bans a mod on `server_id` must enforce now, and the list's revision.
+    pub fn active_bans(&self, server_id: &str, now: i64) -> Result<(Vec<Ban>, String)> {
+        let bans: Vec<Ban> = self
+            .bans(&[server_id], usize::MAX)?
+            .into_iter()
+            .filter(|b| b.is_active(now))
+            .map(|b| b.ban)
+            .collect();
+        // Changes whenever a ban is added, lifted or runs out.
+        let mut ids: Vec<i64> = bans.iter().map(|b| b.id).collect();
+        ids.sort_unstable();
+        let rev = format!(
+            "{}:{}",
+            ids.len(),
+            ids.iter()
+                .fold(0u64, |h, &id| h.wrapping_mul(31).wrapping_add(id as u64))
+        );
+        Ok((bans, rev))
+    }
+
     /// Give freed pages back to the file system and checkpoint the WAL. Cheap; run after pruning.
     pub fn compact(&self) {
         let _ = self
@@ -700,9 +907,132 @@ impl Store {
     }
 }
 
+fn split_ids(s: Option<String>) -> Vec<String> {
+    s.map(|s| s.lines().map(str::to_string).filter(|l| !l.is_empty()).collect())
+        .unwrap_or_default()
+}
+
+/// An event as saved, with its database id and server.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredEvent {
+    pub id: i64,
+    pub server_id: String,
+    pub event: ServerEvent,
+}
+
+/// A ban to issue.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct NewBan {
+    pub player: Option<String>,
+    pub ids: Vec<String>,
+    pub reason: String,
+    pub author: String,
+    pub created_unix: i64,
+    pub expires_unix: Option<i64>,
+}
+
+/// A ban as saved.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BanRecord {
+    /// `None` = every server.
+    pub server_id: Option<String>,
+    pub ban: Ban,
+    pub revoked_unix: Option<i64>,
+    pub revoked_by: Option<String>,
+}
+
+impl BanRecord {
+    pub fn is_active(&self, now: i64) -> bool {
+        self.revoked_unix.is_none() && self.ban.expires_unix.is_none_or(|t| t > now)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn events_round_trip_and_prune() {
+        let s = Store::open_in_memory().unwrap();
+        let ban = ServerEvent {
+            kind: "ban".into(),
+            at_unix: Some(100),
+            player: Some("Bob".into()),
+            author: Some("Admin".into()),
+            reason: Some("griefing".into()),
+            action_id: Some("B1".into()),
+            expires_unix: None,
+            ids: vec!["license:abc".into(), "discord:1".into()],
+        };
+        let announce = ServerEvent {
+            kind: "announcement".into(),
+            reason: Some("hi".into()),
+            ..Default::default()
+        };
+        let revoke = ServerEvent {
+            kind: "revoke".into(),
+            at_unix: Some(300),
+            action_id: Some("B1".into()),
+            ..Default::default()
+        };
+        s.add_events("rp", &[ban.clone(), announce], 200).unwrap();
+        s.add_events("rp", &[revoke], 300).unwrap();
+        s.add_events(
+            "other",
+            &[ServerEvent {
+                kind: "kick".into(),
+                ..Default::default()
+            }],
+            50,
+        )
+        .unwrap();
+
+        let all = s.events(&["rp"], None, 10).unwrap();
+        assert_eq!(
+            all.iter().map(|e| e.event.kind.as_str()).collect::<Vec<_>>(),
+            ["revoke", "announcement", "ban"]
+        );
+        assert_eq!(all[2].event, ban);
+        assert_eq!(s.events(&["rp", "other"], Some(&["ban", "kick"]), 10).unwrap().len(), 2);
+        assert_eq!(s.revoked_actions(&["rp"]).unwrap(), BTreeSet::from(["B1".to_string()]));
+        assert!(s.events(&[], None, 10).unwrap().is_empty());
+
+        // Announcements go after the short window, moderation only after the long one.
+        assert_eq!(s.prune_events(250, 0).unwrap(), 1);
+        assert_eq!(s.prune_events(1000, 120).unwrap(), 2);
+        assert_eq!(s.events(&["rp", "other"], None, 10).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn bans_scope_expiry_and_revision() {
+        let s = Store::open_in_memory().unwrap();
+        let new = |ids: &[&str], expires| NewBan {
+            player: Some("Bob".into()),
+            ids: ids.iter().map(|i| i.to_string()).collect(),
+            reason: "cheating".into(),
+            author: "admin".into(),
+            created_unix: 100,
+            expires_unix: expires,
+        };
+        assert!(s.add_ban(None, &new(&[" "], None)).is_err());
+        let everywhere = s.add_ban(None, &new(&["license:a"], None)).unwrap();
+        let here = s.add_ban(Some("rp"), &new(&["license:b"], Some(500))).unwrap();
+        s.add_ban(Some("other"), &new(&["license:c"], None)).unwrap();
+
+        let (bans, rev1) = s.active_bans("rp", 200).unwrap();
+        assert_eq!(
+            bans.iter().map(|b| b.id).collect::<BTreeSet<_>>(),
+            BTreeSet::from([everywhere, here])
+        );
+        let (bans, rev2) = s.active_bans("rp", 600).unwrap();
+        assert_eq!(bans.len(), 1, "expired ban dropped");
+        assert_ne!(rev1, rev2);
+        assert!(s.revoke_ban(everywhere, "admin", 700).unwrap());
+        assert!(!s.revoke_ban(everywhere, "admin", 700).unwrap());
+        assert!(s.active_bans("rp", 700).unwrap().0.is_empty());
+        assert_eq!(s.bans(&["rp"], 10).unwrap().len(), 2);
+        assert_eq!(s.bans(&["rp", "other"], 10).unwrap().len(), 3);
+    }
 
     fn perms(keys: &[&str]) -> BTreeSet<String> {
         keys.iter().map(|k| k.to_string()).collect()

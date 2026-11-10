@@ -479,6 +479,10 @@ mod tests {
             alerts: false,
             native: None,
             log_dir: None,
+            control: None,
+            process: None,
+            status_file: None,
+            telnet: None,
         }
     }
 

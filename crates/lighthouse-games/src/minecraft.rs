@@ -124,7 +124,11 @@ fn java_status(json: &Value, now_unix: i64) -> ServerStatus {
             .map(strip_formatting)
             // Servers often hide the list behind fake entries like "and 12 more"; keep only real-looking names.
             .filter(|n| !n.is_empty() && !n.contains(' '))
-            .map(|name| Player { name, ping_ms: None })
+            .map(|name| Player {
+                name,
+                ping_ms: None,
+                ..Default::default()
+            })
             .collect();
     }
     s

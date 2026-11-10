@@ -2,7 +2,8 @@
   <!--
     Server-side 7 Days to Die mod. Build with:
       dotnet build -c Release -p:SevenDaysServerDir="<path to the dedicated server install>"
-    The output DLL goes next to Lighthouse/ModInfo.xml; copy that folder into the server's Mods folder.
+    The output DLL goes next to Lighthouse/ModInfo.xml; copy that folder into the server's Mods folder,
+    then copy Config.example.xml to Config.xml there and fill it in.
   -->
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
@@ -27,6 +28,10 @@
     </Reference>
     <Reference Include="LogLibrary">
       <HintPath>$(ManagedDir)\LogLibrary.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(ManagedDir)\UnityEngine.CoreModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>

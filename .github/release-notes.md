@@ -47,7 +47,7 @@ The bot keeps one status post per server (or one board for all of them) up to da
 
 Run `lighthouse games` for the full list, or `lighthouse query <game> <address> [port]` to test a server before adding it. No game mods are needed.
 
-**A server shows offline?** Many games answer status on a different port from the one players join: Project Zomboid B42 on `SteamPort1` (default 8766), VEIN usually on the game port + 1. Find it with `lighthouse query`, then set `query_port` for that server. The [README](https://github.com/Hailey-Ross/hails.Lighthouse#troubleshooting) has more fixes.
+**A server shows offline?** Some games answer status on a different port from the one players join: VEIN usually on the game port + 1. Find it with `lighthouse query`, then set `query_port` for that server. The [README](https://github.com/Hailey-Ross/hails.Lighthouse#troubleshooting) has more fixes.
 
 ## What's in it
 

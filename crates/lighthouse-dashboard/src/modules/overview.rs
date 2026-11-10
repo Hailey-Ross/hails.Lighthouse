@@ -71,6 +71,7 @@ fn card(server: &ServerConfig, status: &ServerStatus, now: i64, link_uptime: boo
                     @if let Some(d) = &status.description { dt { "About" } dd { (d) } }
                     @if let Some(mode) = &status.mode { dt { "Mode" } dd { (mode) } }
                     @if let Some(map) = &status.map { dt { "Map" } dd { (map) } }
+                    @if let Some(t) = status.next_restart_unix.filter(|t| *t > now) { dt { "Next restart" } dd { "in " (fmt_duration(t - now)) } }
                     @if let Some(w) = status.wiped_at_unix { dt { "Last wipe" } dd { (fmt_duration(now - w)) " ago" } }
                     @if let Some(t) = status.game_time {
                         dt { "In game" } dd { (t.label()) }

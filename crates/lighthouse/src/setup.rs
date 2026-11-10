@@ -62,8 +62,37 @@ pub async fn run(path: &Path) -> anyhow::Result<()> {
     heading("Discord bots");
     let (mode, bots) = bots::setup_bots(&theme, &servers).await?;
 
-    // Mods and agents can't send status yet, so there is nothing to ask (see docs/architecture.md).
-    let ingest: Option<IngestConfig> = None;
+    // Heartbeats from game mods: only worth asking when a game has a Lighthouse mod.
+    let has_mod_game = servers
+        .iter()
+        .any(|s| s.game.is(GameKind::SEVEN_DAYS_TO_DIE) || s.game.protocol() == lighthouse_core::Protocol::FiveM);
+    let ingest: Option<IngestConfig> = if has_mod_game {
+        heading("Game mods");
+        println!(
+            "The Lighthouse resource for FiveM/RedM (txAdmin events, bans from the dashboard) and the\n\
+             7 Days to Die mod send status to Lighthouse. That needs a port your game servers can reach."
+        );
+        if Confirm::with_theme(&theme)
+            .with_prompt("Accept status from game mods?")
+            .default(true)
+            .interact()?
+        {
+            let bind: String = Input::with_theme(&theme)
+                .with_prompt("Listen on (address:port)")
+                .default("0.0.0.0:8651".to_string())
+                .interact_text()?;
+            let secret = crate::password::random_secret(24)?;
+            println!(
+                "\nGive the mods this address (this machine's IP and the port above) and this secret:\n\n    {secret}\n\n\
+                 Open the port to your game servers only. See docs/heartbeat.md and the mods/ folder."
+            );
+            Some(IngestConfig { bind, secret })
+        } else {
+            None
+        }
+    } else {
+        None
+    };
 
     heading("Web dashboard");
     let (dashboard, admin) = if Confirm::with_theme(&theme)
@@ -297,6 +326,10 @@ async fn ask_server(theme: &ColorfulTheme, taken: &HashSet<String>) -> anyhow::R
         alerts: false,
         native: None,
         log_dir: None,
+        control: None,
+        process: None,
+        status_file: None,
+        telnet: None,
     };
 
     // Check the server right away so a wrong port is caught now, not after the bot is running.

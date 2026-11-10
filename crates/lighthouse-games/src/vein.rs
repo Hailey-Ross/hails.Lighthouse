@@ -22,7 +22,10 @@ impl GameAdapter for Vein {
     }
 
     async fn query(&self, server: &ServerConfig, now_unix: i64) -> Result<ServerStatus, QueryError> {
-        let data = steam::query(server).await?;
+        let data = match steam::query(server).await {
+            Ok(data) => data,
+            Err(e) => return native::instead_of_query(server, now_unix, e).await,
+        };
         let mut status = steam::base_status(&data, now_unix);
         native::extra(server).await.apply(&mut status);
         Ok(status)

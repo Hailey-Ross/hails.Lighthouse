@@ -3,7 +3,7 @@ use lighthouse_core::{Capabilities, GameAdapter, GameKind, QueryError, ServerCon
 use crate::a2s::Rules;
 use crate::{native, steam};
 
-/// Project Zomboid (Build 42). Steam query on `SteamPort1` (default 8766). With RCON configured
+/// Project Zomboid (Build 42). Steam query on the game port (`DefaultPort`, default 16261). With RCON configured
 /// (`native = { kind = "rcon", ... }`) the player list comes from the `players` command.
 pub struct ProjectZomboid;
 
@@ -33,7 +33,10 @@ impl GameAdapter for ProjectZomboid {
     }
 
     async fn query(&self, server: &ServerConfig, now_unix: i64) -> Result<ServerStatus, QueryError> {
-        let data = steam::query(server).await?;
+        let data = match steam::query(server).await {
+            Ok(data) => data,
+            Err(e) => return native::instead_of_query(server, now_unix, e).await,
+        };
         let mut status = steam::base_status(&data, now_unix);
         if let Some(v) = real_version(&data.rules, data.info.keywords.as_deref()) {
             status.version = Some(v);

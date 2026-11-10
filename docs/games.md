@@ -13,7 +13,7 @@ Tested against live servers, with game-specific details (in-game time, blood moo
 | Game | id | Aliases | Protocol | Port | Query |
 |---|---|---|---|---|---|
 | 7 Days to Die | `seven_days_to_die` | `7dtd`, `7d2d`, `sdtd` | Steam query | 26900 | 26900 |
-| Project Zomboid | `project_zomboid` | `pz`, `projectzomboid`, `zomboid` | Steam query | 16261 | 8766 |
+| Project Zomboid | `project_zomboid` | `pz`, `projectzomboid`, `zomboid` | Steam query | 16261 | 16261 |
 | VEIN | `vein` |  | Steam query | 7777 | 7778 (port + 1) |
 
 ## Experimental

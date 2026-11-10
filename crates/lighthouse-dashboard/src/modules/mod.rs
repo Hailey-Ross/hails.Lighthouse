@@ -1,6 +1,8 @@
 //! Dashboard pages. **Register new modules in [`all`]**; the order here is the menu order.
 
+mod controls;
 mod logs;
+mod moderation;
 mod overview;
 mod reports;
 mod security;
@@ -18,6 +20,8 @@ pub fn all() -> Vec<Box<dyn Module>> {
         Box::new(overview::Overview),
         Box::new(uptime::Uptime),
         Box::new(reports::Reports),
+        Box::new(controls::Controls),
+        Box::new(moderation::Moderation),
         Box::new(logs::Logs),
         Box::new(users::Users),
         Box::new(security::Security),

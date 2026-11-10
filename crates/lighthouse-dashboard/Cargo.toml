@@ -12,6 +12,7 @@ rust-version.workspace = true
 axum.workspace = true
 lighthouse-core.workspace = true
 lighthouse-discord.workspace = true
+lighthouse-games.workspace = true
 lighthouse-store.workspace = true
 maud.workspace = true
 serde.workspace = true

@@ -68,7 +68,11 @@ fn fivem_status(dynamic: &Value, info: Option<&Value>, players: Option<&Value>, 
             .filter_map(|p| {
                 let name = strip_colours(p.get("name")?.as_str()?);
                 let ping_ms = number(p.get("ping"));
-                (!name.is_empty()).then_some(Player { name, ping_ms })
+                (!name.is_empty()).then_some(Player {
+                    name,
+                    ping_ms,
+                    ..Default::default()
+                })
             })
             .collect();
         if s.players_online.is_none() {

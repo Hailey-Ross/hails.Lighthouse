@@ -97,8 +97,10 @@ Off unless you turn it on (in the setup, or later with `lighthouse set-password`
 <http://127.0.0.1:8650> on the machine running Lighthouse and sign in.
 
 - **Servers** at a glance, **Uptime** (history and outages), **Reports** (players over time, peaks,
-  player-hours, when people play, CSV export), **Logs** (for game servers on the same machine: set
-  `log_dir` on the server in `lighthouse.toml`), **Users** and **Security**.
+  player-hours, when people play, CSV export), **Controls** (start, stop, restart, messages),
+  **Moderation** (who's online, kicks, bans, and txAdmin/game bans, warnings and restarts),
+  **Logs** (log files and a live console), **Users** and **Security**. Controls, moderation and the
+  live console need a game API or mod: see [docs/mods.md](docs/mods.md).
 - **Admins:** the superadmin from the setup invites others from the Users page and ticks exactly
   which pages and servers each one can see. Sign-up only works with an invite link; addresses that
   guess invite links are blocked for longer each time.
@@ -126,11 +128,11 @@ on a **query port** that differs from the port players join:
 | Game | Query port |
 |---|---|
 | 7 Days to Die | the game port (default 26900) |
-| Project Zomboid (B42) | `SteamPort1`, default **8766** (not 16261) |
+| Project Zomboid (B42) | the game port (`DefaultPort`, default 16261) |
 | VEIN | usually the game port **+ 1** (or `-QueryPort`, default 27015) |
 | Others | see [docs/games.md](docs/games.md); often the game port, game port + 1, or 27015 |
 
-Try it: `lighthouse query pz 203.0.113.10 8766`. When you find the port that answers, put it in
+Try it: `lighthouse query pz 203.0.113.10 16261`. When you find the port that answers, put it in
 `lighthouse.toml` as `query_port = …` on that server. Rented servers often list the query port in the
 control panel's port section.
 
@@ -164,17 +166,18 @@ What each game shows beyond name, players and uptime:
 
 | Game | Extra details |
 |---|---|
-| 7 Days to Die | In-game day and time, blood moon countdown. With its web API: player names and pings. |
-| Project Zomboid | Player names. With RCON: a player list that stays right on Build 42. |
-| VEIN | With its HTTP API (same machine or private network only): player names. |
-| FiveM / RedM | Server name and description, game type, version, player names (unless hidden). |
+| 7 Days to Die | In-game day and time, blood moon countdown. With its web API: real uptime, player names and pings, the exact blood moon day (also on random ranges), a live console, and server controls. |
+| Project Zomboid | Player names. With RCON: a player list that stays right on Build 42, and server controls. |
+| VEIN | With its HTTP API: real uptime and player names. |
+| FiveM / RedM | Server name and description, game type, version, player names (unless hidden). With the Lighthouse resource: real uptime, txAdmin events, the next scheduled restart, bans from the dashboard, controls. |
 | Minecraft | Message of the day, version, some player names; Bedrock also the game mode. |
 | Rust | Time since the last wipe. |
 | DayZ | In-game time. |
 
 7 Days to Die and VEIN don't share player names through the server query, so without their APIs the
 cards show player counts only. The setup asks about each API; they can also be added to the config
-later (see `native` in [lighthouse.example.toml](lighthouse.example.toml)).
+later (see `native` in [lighthouse.example.toml](lighthouse.example.toml)). Step-by-step for every
+game, including the FiveM/RedM resource and the 7 Days to Die mod: [docs/mods.md](docs/mods.md).
 
 ## For developers
 
@@ -195,8 +198,8 @@ when the version in `Cargo.toml` is new; it needs a section in [CHANGELOG.md](CH
 | `crates/lighthouse-discord` | Polling, status cards and the Discord bots |
 | `crates/lighthouse-dashboard` | Web dashboard; each page is a module in `src/modules/` |
 | `crates/lighthouse-store` | SQLite storage: users, invites, sessions, history, blocks |
-| `mods/` | Server-side mods for 7 Days to Die and Project Zomboid (planned, not used yet) |
-| `docs/` | [Architecture](docs/architecture.md), [games](docs/games.md), [heartbeat format](docs/heartbeat.md) |
+| `mods/` | The FiveM/RedM resource, the 7 Days to Die mod and the Project Zomboid mod ([setup](docs/mods.md)) |
+| `docs/` | [Architecture](docs/architecture.md), [games](docs/games.md), [game APIs and mods](docs/mods.md), [heartbeat format](docs/heartbeat.md) |
 | `assets/brand/` | Icon, logo, banner and animated icon (`tools/brand/render_brand.py` renders them) |
 | `deploy/`, `Dockerfile` | systemd unit and container image |
 

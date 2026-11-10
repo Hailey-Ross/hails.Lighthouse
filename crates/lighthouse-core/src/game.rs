@@ -270,7 +270,8 @@ mod tests {
     fn aliases_and_ports() {
         let pz = GameKind::from_id("PZ").unwrap();
         assert!(pz.is(GameKind::PROJECT_ZOMBOID));
-        assert_eq!(pz.query_port_for(16261), 8766);
+        // Build 42 answers the Steam query on its game port (checked on a 42.22 server).
+        assert_eq!(pz.query_port_for(16261), 16261);
         let vein = GameKind::get(GameKind::VEIN);
         assert_eq!(vein.query_port_for(27018), 27019);
         assert_eq!(GameKind::from_id("7dtd").unwrap().query_port_for(26930), 26930);

@@ -187,6 +187,50 @@ pub struct ServerConfig {
     /// The server's install (or data) folder, if it is on this machine. The dashboard reads its logs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub log_dir: Option<String>,
+    /// Start/stop/restart commands, if the server runs on this machine (a service, a script).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub control: Option<crate::control::LocalControl>,
+    /// Name of the server's program (e.g. `VeinServer`), if it runs on this machine: its start
+    /// time gives the real uptime.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub process: Option<String>,
+    /// A status file a game mod writes on this machine (Project Zomboid: `Zomboid/Lua/lighthouse_status.json`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status_file: Option<String>,
+    /// 7 Days to Die telnet console, for server controls (stop, messages, kicks, bans).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub telnet: Option<Telnet>,
+}
+
+/// Login for 7 Days to Die's telnet console (`TelnetPort` and `TelnetPassword` in serverconfig.xml).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Telnet {
+    pub port: u16,
+    pub password: String,
+}
+
+impl ServerConfig {
+    /// A server with only the essentials set; everything else at its default.
+    pub fn new(id: impl Into<String>, game: GameKind, host: impl Into<String>, game_port: u16) -> Self {
+        Self {
+            id: id.into(),
+            game,
+            name: None,
+            host: host.into(),
+            game_port,
+            query_port: None,
+            show_address: true,
+            show_players: true,
+            alerts: false,
+            native: None,
+            log_dir: None,
+            control: None,
+            process: None,
+            status_file: None,
+            telnet: None,
+        }
+    }
 }
 
 /// Game-specific interfaces Lighthouse can poll directly.
@@ -305,6 +349,11 @@ impl Config {
         if self.updates.check_interval_hours == 0 {
             problems.push("updates.check_interval_hours must be at least 1".to_string());
         }
+        if let Some(ingest) = &self.ingest
+            && ingest.secret.trim().len() < 16
+        {
+            problems.push("ingest.secret must be at least 16 characters (`lighthouse setup` makes one)".to_string());
+        }
 
         let mut ids = HashSet::new();
         for s in &self.servers {
@@ -329,6 +378,12 @@ impl Config {
                         s.id, s.game
                     ));
                 }
+            }
+        }
+
+        for s in &self.servers {
+            if s.telnet.is_some() && !s.game.is(GameKind::SEVEN_DAYS_TO_DIE) {
+                problems.push(format!("server {:?}: telnet is only for 7 Days to Die", s.id));
             }
         }
 

@@ -84,6 +84,4 @@ regular result stands and the error is logged at debug level.
 
 ## Planned
 
-- **Server-side mods and an agent** that report true uptime and more, sent as
-  [heartbeats](heartbeat.md). The `mods/` folder holds the first drafts.
 - Adding servers and bots from the dashboard, and Discord slash commands.

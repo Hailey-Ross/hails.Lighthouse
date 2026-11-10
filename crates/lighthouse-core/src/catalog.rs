@@ -9,7 +9,7 @@ use crate::game::{GameProfile, Protocol, QueryPort, Support};
 #[rustfmt::skip]
 pub(crate) static GAMES: &[GameProfile] = &[
     GameProfile { id: "seven_days_to_die", aliases: &["7dtd", "7d2d", "sdtd"], name: "7 Days to Die", short: "7DTD", protocol: Protocol::Steam, game_port: 26900, query_port: QueryPort::Same, support: Support::Full },
-    GameProfile { id: "project_zomboid", aliases: &["pz", "projectzomboid", "zomboid"], name: "Project Zomboid", short: "PZ", protocol: Protocol::Steam, game_port: 16261, query_port: QueryPort::Fixed(8766), support: Support::Full },
+    GameProfile { id: "project_zomboid", aliases: &["pz", "projectzomboid", "zomboid"], name: "Project Zomboid", short: "PZ", protocol: Protocol::Steam, game_port: 16261, query_port: QueryPort::Same, support: Support::Full },
     GameProfile { id: "vein", aliases: &[], name: "VEIN", short: "VEIN", protocol: Protocol::Steam, game_port: 7777, query_port: QueryPort::Offset(1), support: Support::Full },
     GameProfile { id: "minecraft", aliases: &["mc", "minecraft_java"], name: "Minecraft (Java Edition)", short: "MC", protocol: Protocol::MinecraftJava, game_port: 25565, query_port: QueryPort::Same, support: Support::Experimental },
     GameProfile { id: "minecraft_bedrock", aliases: &["mbe", "bedrock"], name: "Minecraft (Bedrock Edition)", short: "MCBE", protocol: Protocol::MinecraftBedrock, game_port: 19132, query_port: QueryPort::Same, support: Support::Experimental },

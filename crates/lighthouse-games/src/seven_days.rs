@@ -48,7 +48,10 @@ impl GameAdapter for SevenDaysToDie {
     }
 
     async fn query(&self, server: &ServerConfig, now_unix: i64) -> Result<ServerStatus, QueryError> {
-        let data = steam::query(server).await?;
+        let data = match steam::query(server).await {
+            Ok(data) => data,
+            Err(e) => return native::instead_of_query(server, now_unix, e).await,
+        };
         let mut status = steam::base_status(&data, now_unix);
         if let Some(t) = game_time(&data.rules) {
             status.blood_moon_in_days = blood_moon_in_days(&data.rules, t.day);

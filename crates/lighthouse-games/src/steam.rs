@@ -68,7 +68,13 @@ pub(crate) fn base_status(data: &SteamData, now_unix: i64) -> ServerStatus {
     s.players = data
         .players
         .iter()
-        .filter_map(|p| non_empty(&p.name).map(|name| Player { name, ping_ms: None }))
+        .filter_map(|p| {
+            non_empty(&p.name).map(|name| Player {
+                name,
+                ping_ms: None,
+                ..Default::default()
+            })
+        })
         .collect();
     s
 }

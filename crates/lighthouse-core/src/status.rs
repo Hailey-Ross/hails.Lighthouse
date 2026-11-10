@@ -20,6 +20,12 @@ pub struct Player {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ping_ms: Option<u32>,
+    /// The game's id for the player in this session (FiveM server id, 7DTD entity id), for kicks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    /// Lasting identifiers (`license:...`, `discord:...`, Steam id), reported by mods, for bans.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ids: Vec<String>,
 }
 
 /// In-game clock.
@@ -70,6 +76,9 @@ pub struct ServerStatus {
     /// Unix time (seconds) of the last wipe, for games that report it (Rust).
     #[serde(default)]
     pub wiped_at_unix: Option<i64>,
+    /// Unix time (seconds) of the next scheduled restart, when the server announces one (txAdmin).
+    #[serde(default)]
+    pub next_restart_unix: Option<i64>,
     /// Unix time (seconds) this status was observed.
     pub observed_at_unix: i64,
 }
@@ -104,6 +113,7 @@ impl ServerStatus {
             description: None,
             mode: None,
             wiped_at_unix: None,
+            next_restart_unix: None,
             observed_at_unix,
         }
     }
@@ -142,6 +152,7 @@ impl ServerStatus {
         fill(&mut self.description, &other.description);
         fill(&mut self.mode, &other.mode);
         fill(&mut self.wiped_at_unix, &other.wiped_at_unix);
+        fill(&mut self.next_restart_unix, &other.next_restart_unix);
         if self.players.is_empty() {
             self.players.clone_from(&other.players);
         }

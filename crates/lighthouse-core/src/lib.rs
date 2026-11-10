@@ -6,14 +6,18 @@
 
 mod catalog;
 pub mod config;
+pub mod control;
 pub mod game;
 pub mod heartbeat;
+pub mod relay;
 pub mod status;
 
 pub use config::{
     BotConfig, BotMode, Config, ConfigError, DEFAULT_UPDATE_REPO, DashboardConfig, IngestConfig, NativeApi,
-    ServerConfig, UPDATE_CHANNELS, UpdateConfig,
+    ServerConfig, Telnet, UPDATE_CHANNELS, UpdateConfig,
 };
+pub use control::{ControlAction, LocalControl};
 pub use game::{Capabilities, GameAdapter, GameKind, GameProfile, Protocol, QueryError, QueryPort, Support};
-pub use heartbeat::{HEARTBEAT_VERSION, Heartbeat};
+pub use heartbeat::{Ban, HEARTBEAT_VERSION, Heartbeat, HeartbeatReply, ServerEvent};
+pub use relay::{Command, LogLine, Relay};
 pub use status::{GameTime, Player, ServerState, ServerStatus};

@@ -153,6 +153,9 @@ fn server_body(server: &ServerConfig, status: &ServerStatus, now_unix: i64, deta
                         n => format!("Blood moon in {n} days"),
                     });
                 }
+                if let Some(at) = status.next_restart_unix.filter(|t| *t > now_unix) {
+                    sub.push(format!("Restart <t:{at}:R>"));
+                }
                 if let Some(wiped) = status.wiped_at_unix {
                     sub.push(format!("Wiped <t:{wiped}:R>"));
                 }
@@ -465,6 +468,10 @@ mod tests {
             alerts: false,
             native: None,
             log_dir: None,
+            control: None,
+            process: None,
+            status_file: None,
+            telnet: None,
         }
     }
 
@@ -483,10 +490,12 @@ mod tests {
             Player {
                 name: "a_b".into(),
                 ping_ms: None,
+                ..Default::default()
             },
             Player {
                 name: "c".into(),
                 ping_ms: None,
+                ..Default::default()
             },
         ];
         s

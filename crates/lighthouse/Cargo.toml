@@ -10,6 +10,7 @@ rust-version.workspace = true
 
 [dependencies]
 anyhow = "1"
+axum.workspace = true
 lighthouse-store.workspace = true
 clap.workspace = true
 dialoguer = { version = "0.11", features = ["fuzzy-select"] }
@@ -26,3 +27,6 @@ sha2 = "0.10"
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Lighthouse mod settings. Copy this file to Config.xml (same folder) and fill it in.
+    url       where Lighthouse listens for heartbeats ([ingest] bind in lighthouse.toml)
+    secret    the ingest secret from lighthouse.toml
+    serverId  this server's id in lighthouse.toml
+    console   "false" stops forwarding console output to the dashboard
+-->
+<Lighthouse url="http://203.0.113.10:8651" secret="paste-the-ingest-secret" serverId="7dtd-pve" console="true" />

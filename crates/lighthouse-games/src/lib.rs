@@ -5,15 +5,18 @@
 //! FiveM HTTP. Game-specific APIs (7DTD web API, PZ RCON, VEIN HTTP) add detail on top (`native`).
 
 pub mod a2s;
+pub mod control;
 mod fivem;
 mod generic;
 mod http;
+pub mod local;
 mod minecraft;
-mod native;
+pub mod native;
 mod project_zomboid;
 pub mod rcon;
 mod seven_days;
 mod steam;
+pub mod telnet;
 mod vein;
 
 use lighthouse_core::{GameAdapter, GameKind, Protocol};

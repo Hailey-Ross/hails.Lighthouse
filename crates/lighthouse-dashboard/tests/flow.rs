@@ -39,7 +39,7 @@ fn app() -> axum::Router {
     store
         .create_user("viewer", "password2", false, &view, Some(&athens), 0)
         .unwrap();
-    let monitor = Monitor::new(&config.servers, None);
+    let monitor = Monitor::new(&config.servers, None, Arc::new(lighthouse_core::Relay::default()));
     router(Arc::new(Context {
         config,
         monitor,

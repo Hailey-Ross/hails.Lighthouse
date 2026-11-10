@@ -1,14 +1,18 @@
-//! Server logs, for servers running on the same machine as Lighthouse.
+//! Server logs.
 //!
-//! Each server can have a `log_dir` (its install or data folder). The scanner looks for log files
-//! under it; the viewer shows the end of one file, optionally filtered. Files are chosen by their
-//! position in the scan, never by a path from the browser, so nothing outside `log_dir` is readable.
+//! - **Log files**, for servers on the same machine as Lighthouse: each server can have a `log_dir`
+//!   (its install or data folder). The scanner looks for log files under it; the viewer shows the
+//!   end of one file, optionally filtered, or follows it live. Files are chosen by their position in
+//!   the scan, never by a path from the browser, so nothing outside `log_dir` is readable.
+//! - **Live console**, for servers whose mod sends its console lines with each heartbeat (works
+//!   for rented servers too).
 
 use std::fs;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path as FsPath, PathBuf};
 use std::time::UNIX_EPOCH;
 
+use axum::Json;
 use axum::Router;
 use axum::extract::{Path, Query, State};
 use axum::response::{IntoResponse, Response};
@@ -74,6 +78,10 @@ impl Module for Logs {
             .route("/", get(list))
             .route("/{id}", get(files))
             .route("/{id}/view", get(view))
+            .route("/{id}/live", get(live))
+            .route("/{id}/poll", get(poll))
+            .route("/{id}/console", get(console))
+            .route("/{id}/console/poll", get(console_poll))
     }
 }
 
@@ -205,7 +213,12 @@ async fn scan_server(server: &ServerConfig) -> Vec<LogFile> {
 
 async fn list(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> Markup {
     let servers = state.visible_servers(&user);
-    let with_logs: Vec<_> = servers.iter().filter(|s| s.log_dir.is_some()).collect();
+    let relay = state.ctx.monitor.relay();
+    let live_console = |s: &ServerConfig| relay.has_log(&s.id) || lighthouse_games::native::has_sdtd_api(s);
+    let with_logs: Vec<_> = servers
+        .iter()
+        .filter(|s| s.log_dir.is_some() || live_console(s))
+        .collect();
     layout::page(
         &state,
         &user,
@@ -214,18 +227,19 @@ async fn list(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> 
         html! {
             @if with_logs.is_empty() {
                 div.notice {
-                    p { "No server has a log folder set." }
+                    p { "No server has a log folder set, and no server mod has sent console lines yet." }
                     p { "If a game server runs on this machine, add its install folder to its entry in the config file, e.g.:" }
                     pre.example { "[[servers]]\nid = \"athens\"\n...\nlog_dir = \"C:/Games/7DaysToDieServer\"" }
                     p.muted { "Project Zomboid keeps its logs in the Zomboid folder in the user's home (Zomboid/Logs)." }
                 }
             } @else {
                 div.table-wrap { table {
-                    thead { tr { th { "Server" } th { "Game" } th { "Folder" } } }
+                    thead { tr { th { "Server" } th { "Game" } th { "Log files" } th { "Live console" } } }
                     tbody { @for s in &with_logs { tr {
-                        td { a href={ "/logs/" (s.id) } { (server_name(s, state.ctx.monitor.status(&s.id).as_ref())) } }
+                        td { (server_name(s, state.ctx.monitor.status(&s.id).as_ref())) }
                         td { (s.game) }
-                        td.muted { (s.log_dir.as_deref().unwrap_or_default()) }
+                        td { @if let Some(dir) = &s.log_dir { a href={ "/logs/" (s.id) } { "Browse" } " " small.muted { (dir) } } }
+                        td { @if live_console(s) { a href={ "/logs/" (s.id) "/console" } { "Open" } } }
                     } } }
                 } }
             }
@@ -251,9 +265,10 @@ async fn files(State(state): State<AppState>, CurrentUser(user): CurrentUser, Pa
                 p.notice { "No log files found in this folder. Check the path, and that Lighthouse may read it." }
             } @else {
                 div.table-wrap { table {
-                    thead { tr { th { "File" } th.num { "Size" } th { "Changed" } } }
+                    thead { tr { th { "File" } th { "Live" } th.num { "Size" } th { "Changed" } } }
                     tbody { @for (i, f) in found.iter().enumerate() { tr {
                         td { a href={ "/logs/" (server.id) "/view?file=" (i) } { (f.shown) } }
+                        td { a href={ "/logs/" (server.id) "/live?file=" (i) } { "Follow" } }
                         td.num { (fmt_bytes(f.size)) }
                         td { (fmt_ago(now, f.modified)) }
                     } } }
@@ -342,9 +357,304 @@ async fn view(
     .into_response()
 }
 
+// ---------- live views ----------
+
+/// Most text one poll returns.
+const POLL_BYTES: u64 = 256 * 1024;
+/// Polls every 2 s; shows the newest lines at the bottom, keeps the page's text bounded, and stops
+/// scrolling while the reader has scrolled up.
+const LIVE_SCRIPT: &str = r#"
+(() => {
+  const pre = document.getElementById('live'), dot = document.getElementById('live-dot'), btn = document.getElementById('live-toggle');
+  let pos = pre.dataset.pos, paused = false;
+  btn.addEventListener('click', () => { paused = !paused; dot.classList.toggle('paused', paused); btn.textContent = paused ? 'Resume' : 'Pause'; });
+  pre.scrollTop = pre.scrollHeight;
+  async function tick() {
+    if (!paused && !document.hidden) {
+      try {
+        const r = await fetch(pre.dataset.poll + encodeURIComponent(pos), { credentials: 'same-origin' });
+        if (r.ok) {
+          const j = await r.json();
+          const atBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 40;
+          if (j.reset) pre.textContent = '';
+          if (j.text) {
+            pre.append(j.text);
+            if (pre.textContent.length > 600000) pre.textContent = pre.textContent.slice(-400000);
+            if (atBottom) pre.scrollTop = pre.scrollHeight;
+          }
+          pos = j.next;
+        }
+      } catch (e) {}
+    }
+    setTimeout(tick, 2000);
+  }
+  setTimeout(tick, 2000);
+})();
+"#;
+
+fn live_page(
+    state: &AppState,
+    user: &lighthouse_store::User,
+    title: &str,
+    initial: &str,
+    poll: &str,
+    pos: &str,
+    back: Markup,
+) -> Markup {
+    layout::page(
+        state,
+        user,
+        "logs",
+        title,
+        html! {
+            div.live-bar {
+                span #live-dot .live-dot aria-hidden="true" {}
+                span.muted { "Live: new lines appear as they're written." }
+                button #live-toggle .quiet type="button" { "Pause" }
+                (back)
+            }
+            pre #live .log data-poll=(poll) data-pos=(pos) { (initial) }
+            script { (PreEscaped(LIVE_SCRIPT)) }
+        },
+    )
+}
+
+#[derive(Deserialize)]
+struct LiveQuery {
+    file: usize,
+    from: Option<u64>,
+}
+
+async fn live(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Path(id): Path<String>,
+    Query(query): Query<LiveQuery>,
+) -> Response {
+    let Some(server) = find_server(&state, &user, &id) else {
+        return forbidden(&state, &user);
+    };
+    let found = scan_server(server).await;
+    let Some(file) = found.get(query.file).cloned() else {
+        return axum::response::Redirect::to(&format!("/logs/{}", server.id)).into_response();
+    };
+    let path = file.path.clone();
+    let (len, lines) = tokio::task::spawn_blocking(move || {
+        let len = fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+        (len, tail(&path, DEFAULT_LINES, None).unwrap_or_default())
+    })
+    .await
+    .unwrap_or_default();
+    let mut initial = lines.join("\n");
+    if !initial.is_empty() {
+        initial.push('\n');
+    }
+    live_page(
+        &state,
+        &user,
+        &file.shown,
+        &initial,
+        &format!("/logs/{}/poll?file={}&from=", server.id, query.file),
+        &len.to_string(),
+        html! { a href={ "/logs/" (server.id) "/view?file=" (query.file) } { "Search this file" } },
+    )
+    .into_response()
+}
+
+#[derive(serde::Serialize, Default)]
+struct PollReply {
+    next: String,
+    text: String,
+    reset: bool,
+}
+
+/// What was added to a file since byte `from`. A file that got shorter was replaced (log
+/// rotation): start over from its end.
+fn read_from(path: &FsPath, from: u64) -> std::io::Result<(u64, String, bool)> {
+    let mut file = fs::File::open(path)?;
+    let len = file.metadata()?.len();
+    let (start, reset) = if from > len {
+        (len.saturating_sub(16 * 1024), true)
+    } else {
+        (from, false)
+    };
+    // Far behind (a burst of output): skip to the last part.
+    let start = start.max(len.saturating_sub(POLL_BYTES));
+    file.seek(SeekFrom::Start(start))?;
+    let mut buf = Vec::new();
+    file.take(POLL_BYTES).read_to_end(&mut buf)?;
+    // Stop at the last complete line so a line isn't split across polls.
+    let end = buf.iter().rposition(|&b| b == b'\n').map_or(0, |i| i + 1);
+    buf.truncate(end);
+    Ok((start + end as u64, String::from_utf8_lossy(&buf).into_owned(), reset))
+}
+
+async fn poll(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Path(id): Path<String>,
+    Query(query): Query<LiveQuery>,
+) -> Response {
+    let Some(server) = find_server(&state, &user, &id) else {
+        return forbidden(&state, &user);
+    };
+    let found = scan_server(server).await;
+    let Some(file) = found.get(query.file).cloned() else {
+        return (axum::http::StatusCode::NOT_FOUND, "no such file").into_response();
+    };
+    let from = query.from.unwrap_or(0);
+    let read = tokio::task::spawn_blocking(move || read_from(&file.path, from))
+        .await
+        .unwrap_or_else(|e| Err(std::io::Error::other(e)));
+    match read {
+        Ok((next, text, reset)) => Json(PollReply {
+            next: next.to_string(),
+            text,
+            reset,
+        })
+        .into_response(),
+        Err(_) => Json(PollReply {
+            next: from.to_string(),
+            ..Default::default()
+        })
+        .into_response(),
+    }
+}
+
+fn console_text(lines: &[lighthouse_core::LogLine]) -> String {
+    let mut out = String::new();
+    for l in lines {
+        out.push_str(&l.text);
+        out.push('\n');
+    }
+    out
+}
+
+async fn console(State(state): State<AppState>, CurrentUser(user): CurrentUser, Path(id): Path<String>) -> Response {
+    let Some(server) = find_server(&state, &user, &id) else {
+        return forbidden(&state, &user);
+    };
+    let name = server_name(server, state.ctx.monitor.status(&server.id).as_ref());
+    // Servers that serve their own log (7 Days to Die web API) are read directly.
+    if let Some(remote) = lighthouse_games::native::remote_log(server, None).await {
+        let (initial, next, note) = match remote {
+            Ok((lines, next)) => (
+                lines.join(
+                    "
+",
+                ) + "
+",
+                next,
+                "Read from the server's web API.".to_string(),
+            ),
+            Err(e) => (String::new(), 0, format!("Could not read the server's log: {e}")),
+        };
+        return live_page(
+            &state,
+            &user,
+            &format!("Console of {name}"),
+            &initial,
+            &format!("/logs/{}/console/poll?after=", server.id),
+            &next.to_string(),
+            html! { span.muted { (note) } },
+        )
+        .into_response();
+    }
+    let lines = state.ctx.monitor.relay().log_since(&server.id, 0);
+    let next = lines.last().map_or(0, |l| l.seq);
+    live_page(
+        &state,
+        &user,
+        &format!("Console of {name}"),
+        &console_text(&lines),
+        &format!("/logs/{}/console/poll?after=", server.id),
+        &next.to_string(),
+        html! { span.muted { "Sent by the server's mod; the last " (lighthouse_core::relay::LOG_LINES) " lines are kept." } },
+    )
+    .into_response()
+}
+
+#[derive(Deserialize)]
+struct ConsoleQuery {
+    after: Option<u64>,
+}
+
+async fn console_poll(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Path(id): Path<String>,
+    Query(query): Query<ConsoleQuery>,
+) -> Response {
+    let Some(server) = find_server(&state, &user, &id) else {
+        return forbidden(&state, &user);
+    };
+    if let Some(remote) = lighthouse_games::native::remote_log(server, query.after).await {
+        let after = query.after.unwrap_or(0);
+        return match remote {
+            Ok((lines, next)) => {
+                // The game restarted and numbering began again: start over.
+                let reset = next < after;
+                let text = if lines.is_empty() {
+                    String::new()
+                } else {
+                    lines.join(
+                        "
+",
+                    ) + "
+"
+                };
+                Json(PollReply {
+                    next: next.to_string(),
+                    text,
+                    reset,
+                })
+                .into_response()
+            }
+            Err(_) => Json(PollReply {
+                next: after.to_string(),
+                ..Default::default()
+            })
+            .into_response(),
+        };
+    }
+    let relay = state.ctx.monitor.relay();
+    let mut after = query.after.unwrap_or(0);
+    let mut lines = relay.log_since(&server.id, after);
+    // The page is ahead of Lighthouse: Lighthouse restarted and numbering began again. Start over.
+    let reset = lines.is_empty() && after > 0 && relay.log_since(&server.id, 0).last().is_none_or(|l| l.seq < after);
+    if reset {
+        after = 0;
+        lines = relay.log_since(&server.id, 0);
+    }
+    let next = lines.last().map_or(after, |l| l.seq);
+    Json(PollReply {
+        next: next.to_string(),
+        text: console_text(&lines),
+        reset,
+    })
+    .into_response()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_new_lines_and_handles_rotation() {
+        let dir = std::env::temp_dir().join(format!("lighthouse-live-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("server.log");
+        fs::write(&path, "one\ntwo\nhalf").unwrap();
+        let (next, text, reset) = read_from(&path, 0).unwrap();
+        assert_eq!((text.as_str(), reset), ("one\ntwo\n", false));
+        fs::write(&path, "one\ntwo\nhalf line\nthree\n").unwrap();
+        let (next2, text, _) = read_from(&path, next).unwrap();
+        assert_eq!(text, "half line\nthree\n");
+        fs::write(&path, "new\n").unwrap();
+        let (_, text, reset) = read_from(&path, next2).unwrap();
+        assert_eq!((text.as_str(), reset), ("new\n", true));
+        fs::remove_dir_all(&dir).unwrap();
+    }
 
     #[test]
     fn log_names() {
