@@ -3,6 +3,15 @@ name: CI
 on:
   push:
     branches: [main, dev]
+    # Docs, images and tooling don't change the program: skip the build.
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "assets/brand/**.png"
+      - "assets/brand/**.gif"
+      - "tools/**"
+      - "LICENSE"
+      - "NOTICE"
   pull_request:
 
 jobs:

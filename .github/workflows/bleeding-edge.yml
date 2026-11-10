@@ -4,6 +4,15 @@ name: Bleeding Edge
 on:
   push:
     branches: [dev]
+    # Docs, images and tooling don't change the program: skip the build.
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "assets/brand/**.png"
+      - "assets/brand/**.gif"
+      - "tools/**"
+      - "LICENSE"
+      - "NOTICE"
   workflow_dispatch:
 
 permissions:
