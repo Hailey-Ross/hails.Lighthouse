@@ -902,6 +902,7 @@ version = "0.1.0"
 dependencies = [
  "lighthouse-core",
  "lighthouse-games",
+ "reqwest",
  "serde",
  "serde_json",
  "thiserror 2.0.21",

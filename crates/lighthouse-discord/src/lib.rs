@@ -4,6 +4,7 @@
 //! `payload_json`, so the renderer does not depend on the Discord library's types.
 
 mod bot;
+pub mod commands;
 pub mod monitor;
 pub mod persist;
 pub mod render;

@@ -84,4 +84,4 @@ regular result stands and the error is logged at debug level.
 
 ## Planned
 
-- Adding servers and bots from the dashboard, and Discord slash commands.
+- Adding servers and bots from the dashboard.

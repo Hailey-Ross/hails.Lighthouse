@@ -26,6 +26,8 @@ released.
 - Unlisted 7 Days to Die servers (which don't answer the status check) show correctly through the
   web API.
 - Project Zomboid's default status port is now the game port (16261), as on Build 42.
+- `/status` slash command: the board, or one server's card picked from an autocomplete list, shown only to
+  the person who asked.
 
 ## 0.1.0
 

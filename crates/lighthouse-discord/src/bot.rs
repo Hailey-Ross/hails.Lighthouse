@@ -19,6 +19,7 @@ use twilight_model::gateway::presence::{Activity, ActivityType, MinimalActivity,
 use twilight_model::id::Id;
 use twilight_model::id::marker::{ChannelMarker, MessageMarker};
 
+use crate::commands;
 use crate::monitor::{Monitor, Transition};
 use crate::now_unix;
 use crate::persist::{MessageRef, Persist};
@@ -109,14 +110,33 @@ impl Bot {
             return;
         };
 
-        // Gateway connection: only needed for the status line, so no intents are requested.
+        // Slash commands: registered under the bot's application.
+        match http.current_user_application().await {
+            Ok(resp) => match resp.model().await {
+                Ok(app) => commands::register(&self.token, app.id.get(), &self.key).await,
+                Err(e) => warn!(bot = %self.key, "could not read the bot's application: {e}"),
+            },
+            Err(e) => warn!(bot = %self.key, "could not read the bot's application: {e}"),
+        }
+
+        // Gateway connection: the status line and slash commands. Neither needs intents.
         let mut gateway = ConfigBuilder::new(self.token.clone(), Intents::empty());
         if let Some(p) = custom_status("Starting…") {
             gateway = gateway.presence(p);
         }
         let shard = Shard::with_config(ShardId::ONE, gateway.build());
         let sender = shard.sender();
-        tokio::spawn(gateway_loop(shard, self.key.clone()));
+        let ctx = GatewayCtx {
+            key: self.key.clone(),
+            servers: Arc::new(self.servers.clone()),
+            monitor: Arc::clone(&monitor),
+            title: self
+                .config
+                .title
+                .clone()
+                .unwrap_or_else(|| render::DEFAULT_TITLE.to_string()),
+        };
+        tokio::spawn(gateway_loop(shard, ctx));
 
         let bot = Arc::new(self);
         tokio::spawn(Arc::clone(&bot).alert_loop(Arc::clone(&http), Arc::clone(&monitor)));
@@ -375,10 +395,29 @@ impl Bot {
     }
 }
 
-/// Keep the gateway connection alive. twilight reconnects by itself; we only log.
-async fn gateway_loop(mut shard: Shard, key: String) {
-    while let Some(item) = shard.next_event(EventTypeFlags::READY).await {
+/// What the gateway loop needs to answer slash commands.
+struct GatewayCtx {
+    key: String,
+    servers: Arc<Vec<ServerConfig>>,
+    monitor: Arc<Monitor>,
+    title: String,
+}
+
+/// Keep the gateway connection alive and answer slash commands. twilight reconnects by itself.
+async fn gateway_loop(mut shard: Shard, ctx: GatewayCtx) {
+    let key = ctx.key.clone();
+    let wanted = EventTypeFlags::READY | EventTypeFlags::INTERACTION_CREATE;
+    while let Some(item) = shard.next_event(wanted).await {
         match item {
+            Ok(Event::InteractionCreate(i)) => {
+                tokio::spawn(commands::handle(
+                    i.0,
+                    Arc::clone(&ctx.servers),
+                    Arc::clone(&ctx.monitor),
+                    ctx.title.clone(),
+                    key.clone(),
+                ));
+            }
             Ok(Event::Ready(ready)) => info!(bot = %key, "connected to the Discord gateway as {}", ready.user.name),
             Ok(Event::GatewayClose(Some(CloseFrame { code, reason, .. }))) => {
                 // 4004: bad token, 4013/4014: intents. Those won't fix themselves.
