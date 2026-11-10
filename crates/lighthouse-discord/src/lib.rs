@@ -38,6 +38,11 @@ fn token_for(bot: &lighthouse_core::BotConfig) -> Result<String, String> {
 /// Start every configured bot. Polling is started separately (see [`monitor::Monitor::spawn_pollers`])
 /// so the dashboard can share the same monitor.
 pub fn start_bots(config: &Config, monitor: &Arc<monitor::Monitor>, persist: &Arc<persist::Persist>) {
+    for game in config.games_without_bot() {
+        tracing::warn!(
+            "no Discord bot shows {game} yet; its servers are only checked (add one on the dashboard's Setup page)"
+        );
+    }
     for bot_config in &config.bots {
         let key = bot_config
             .game

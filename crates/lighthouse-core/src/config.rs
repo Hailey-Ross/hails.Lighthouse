@@ -310,6 +310,22 @@ impl Config {
     }
 
     /// Validate, then write the config as TOML. Comments in an existing file are not kept.
+    /// Games whose servers no bot shows (per-game mode with a bot still to add, or no bot at all).
+    pub fn games_without_bot(&self) -> Vec<GameKind> {
+        let mut games: Vec<GameKind> = self
+            .servers
+            .iter()
+            .map(|s| s.game)
+            .filter(|g| match self.mode {
+                BotMode::Mega => self.bots.is_empty(),
+                BotMode::PerGame => !self.bots.iter().any(|b| b.game == Some(*g)),
+            })
+            .collect();
+        games.sort();
+        games.dedup();
+        games
+    }
+
     pub fn save(&self, path: &Path) -> Result<(), ConfigError> {
         self.validate()?;
         let text = format!(
@@ -406,19 +422,13 @@ impl Config {
                         Some(_) => {}
                     }
                 }
-                let mut used: Vec<GameKind> = self.servers.iter().map(|s| s.game).collect();
-                used.sort();
-                used.dedup();
-                // With no bots at all Lighthouse only polls (handy for testing), so skip the check.
-                for g in used.into_iter().filter(|_| !self.bots.is_empty()) {
-                    if !seen.contains(&g) {
-                        problems.push(format!("servers for {g} are listed but no bot has `game` set to it"));
-                    }
-                }
+                // Games without a bot are allowed (bots can be added one at a time from the
+                // dashboard); their servers are only polled. See `games_without_bot`.
             }
             BotMode::Mega => {
-                if self.bots.len() != 1 {
-                    problems.push("mega mode needs exactly one [[bots]] entry".to_string());
+                // No bot yet is fine (polling only, e.g. until one is added on the dashboard).
+                if self.bots.len() > 1 {
+                    problems.push("mega mode takes one [[bots]] entry".to_string());
                 }
                 if self.bots.iter().any(|b| b.game.is_some()) {
                     problems.push("in mega mode the bot must not set `game`".to_string());
@@ -488,7 +498,7 @@ mod tests {
     }
 
     #[test]
-    fn per_game_needs_a_bot_for_each_game_used() {
+    fn games_without_a_bot_are_only_polled() {
         let text = r#"
             [[bots]]
             game = "pz"
@@ -500,8 +510,21 @@ mod tests {
             host = "127.0.0.1"
             game_port = 7777
         "#;
-        let err = Config::parse(text).unwrap_err().to_string();
-        assert!(err.contains("no bot"), "{err}");
+        // Allowed (bots can be added one at a time), and reported.
+        let c = Config::parse(text).unwrap();
+        assert_eq!(c.games_without_bot(), [GameKind::get("vein")]);
+        // One-bot mode with no bot yet: everything is only polled.
+        let none = Config::parse(
+            "mode = \"mega\"
+[[servers]]
+id = \"a\"
+game = \"pz\"
+host = \"127.0.0.1\"
+game_port = 16261
+",
+        )
+        .unwrap();
+        assert_eq!(none.games_without_bot(), [GameKind::get("pz")]);
     }
 
     #[test]
@@ -524,6 +547,7 @@ mod tests {
         "#;
         let c = Config::parse(text).unwrap();
         assert_eq!(c.servers_for(&c.bots[0]).count(), 2);
+        assert!(c.games_without_bot().is_empty());
     }
 
     #[test]
