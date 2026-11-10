@@ -1,24 +1,37 @@
-# Lighthouse example configuration.
-# Copy to lighthouse.toml and edit. Check it with: lighthouse check-config
+# Lighthouse configuration, with every setting explained.
+#
+# The easiest way to make your own is `lighthouse setup`, which asks a few questions and writes
+# lighthouse.toml for you. To write it by hand, copy this file to lighthouse.toml (next to the
+# program), change what you need, and check it with:  lighthouse check-config
+#
+# Keep lighthouse.toml private if it holds bot tokens.
 
-# "per_game": one Discord bot per game (default).
-# "mega":     one bot shows every server of every game on a single compact board.
+# How the status posts are shared out between Discord bots:
+#   "per_game"  one bot per game (each with its own name, avatar and status line)
+#   "mega"      one bot for every game, with a single combined board
+# Switch later with:  lighthouse bot-mode per-game   or   lighthouse bot-mode mega
 mode = "per_game"
 
 # Seconds between status checks of each server (minimum 10).
 poll_interval_secs = 30
 
-# SQLite database file (created if missing).
+# Database file for history and dashboard accounts. Relative paths are next to this file.
 database = "lighthouse.db"
 
-# One [[bots]] entry per game in per_game mode, or a single entry without `game` in mega mode.
-# Create each bot at https://discord.com/developers/applications and invite it to your server.
+
+# ---------------------------------------------------------------------------------------------
+# Discord bots: one [[bots]] entry per game in "per_game" mode, or one entry without `game` in
+# "mega" mode. `lighthouse setup` walks you through creating them in Discord's Developer Portal.
+# ---------------------------------------------------------------------------------------------
+
 [[bots]]
-game = "7dtd"                       # 7dtd | pz | vein
-token_env = "LIGHTHOUSE_7DTD_TOKEN" # or: token = "..." (keep this file private if you do)
+game = "7dtd"                        # the game this bot posts for (leave out in "mega" mode)
+token_env = "LIGHTHOUSE_7DTD_TOKEN"  # read the token from this environment variable...
+# token = "paste-the-bot-token-here" # ...or put it here directly (then keep this file private)
 status_channel_id = 123456789012345678
+# Optional alerts when a server goes down or comes back (only for servers with alerts = true):
 # alert_channel_id = 123456789012345678
-# alert_role_id = 123456789012345678
+# alert_role_id = 123456789012345678 # role to ping with each alert
 
 [[bots]]
 game = "pz"
@@ -30,49 +43,75 @@ game = "vein"
 token_env = "LIGHTHOUSE_VEIN_TOKEN"
 status_channel_id = 123456789012345678
 
-# Where game mods and agents send their status. Leave out if you only use polling.
-# [ingest]
-# bind = "0.0.0.0:8651"
-# secret = "change-me-to-a-long-random-string"
 
-# Local web dashboard. Off by default. Turn it on with `lighthouse set-password`
-# (sets the admin password and enables it) or during `lighthouse setup`.
-[dashboard]
-enabled = false
-bind = "127.0.0.1:8650"   # 127.0.0.1 = reachable from this machine only
-
-# Updates from GitHub releases.
-[updates]
-check = true                       # look for new versions
-auto_install = false               # install them automatically and restart
-repo = "Hailey-Ross/hails.Lighthouse"    # release source (owner/repository)
-check_interval_hours = 24
-channel = "stable"                 # stable (from main) or bleeding-edge (every dev commit; may break)
+# ---------------------------------------------------------------------------------------------
+# Game servers. Find a game's id with:  lighthouse games <name>
+# Test a server (and find its query port) with:  lighthouse query <game> <address> [port]
+# ---------------------------------------------------------------------------------------------
 
 [[servers]]
-id = "7dtd-pve"            # stable id: letters, digits, - and _
+id = "7dtd-pve"            # short, unique name: letters, digits, - and _
 game = "7dtd"
-name = "PvE Main"          # optional, defaults to the name the server reports
-host = "203.0.113.10"
-game_port = 26900
-# query_port = 26900       # Steam query port, if not the game's default
-show_address = true        # show host:port on the card
-show_players = true        # list player names
-alerts = false             # post up/down alerts
-# native = { kind = "seven_days_web_api", port = 8080, token_name = "lighthouse", token_secret = "..." }
+name = "PvE Main"          # shown on the card (leave out to use the name the server reports)
+host = "203.0.113.10"      # IP address or hostname
+game_port = 26900          # the port players connect to
+# query_port = 26900       # only if status answers on another port (see the README's Troubleshooting)
+show_address = true        # show "host:port" on the card so people can join
+show_players = true        # list player names (where the game shares them)
+alerts = false             # post an alert when this server goes down or comes back
+# log_dir = "C:/Games/7DaysToDieServer"   # install folder, if on this machine: the dashboard shows its logs
 
 [[servers]]
 id = "pz-main"
 game = "pz"
+name = "Safehouse"
 host = "203.0.113.10"
 game_port = 16261
-# native = { kind = "rcon", port = 27015, password = "..." }
+query_port = 8766          # Project Zomboid B42 answers status on SteamPort1 (default 8766)
 
 [[servers]]
 id = "vein-main"
 game = "vein"
 host = "203.0.113.10"
 game_port = 7777
-query_port = 27015         # VEIN answers the Steam query on its QueryPort (default 27015)
-# The VEIN HTTP API has no password. Only use it when Lighthouse runs on the same machine or private network.
-# native = { kind = "vein_http", port = 8080 }
+query_port = 7778          # VEIN usually answers status on the game port + 1
+
+
+# ---------------------------------------------------------------------------------------------
+# Web dashboard. Off unless enabled. `lighthouse set-password` turns it on and creates the
+# superadmin login.
+# ---------------------------------------------------------------------------------------------
+
+[dashboard]
+enabled = false
+bind = "127.0.0.1:8650"    # 127.0.0.1 = only this machine can open it
+# Behind a reverse proxy (Caddy, nginx), use the visitor's address from X-Forwarded-For so blocks
+# apply to visitors, not the proxy. Only when the dashboard can't be reached except through the proxy.
+trust_proxy = false
+
+
+# ---------------------------------------------------------------------------------------------
+# Updates from this project's GitHub releases.
+# ---------------------------------------------------------------------------------------------
+
+[updates]
+check = true                          # look for new builds once per check_interval_hours
+auto_install = false                  # install them and restart by itself
+channel = "stable"                    # "stable" (latest working build) or "bleeding-edge" (may break)
+check_interval_hours = 24
+repo = "Hailey-Ross/hails.Lighthouse" # where releases come from
+
+
+# ---------------------------------------------------------------------------------------------
+# Planned, not used yet. Accepted so configs written now keep working later.
+# ---------------------------------------------------------------------------------------------
+
+# Game APIs for richer details, set per server:
+#   native = { kind = "seven_days_web_api", port = 8080, token_name = "lighthouse", token_secret = "..." }
+#   native = { kind = "rcon", port = 27015, password = "..." }         # Project Zomboid
+#   native = { kind = "vein_http", port = 8080 }                       # VEIN; local network only
+#
+# Status sent by game mods and the Lighthouse agent:
+# [ingest]
+# bind = "0.0.0.0:8651"
+# secret = "a-long-random-string"

@@ -1,78 +1,88 @@
 # Architecture
 
 Lighthouse is one program, `lighthouse`, that every community runs for itself. It watches game
-servers and keeps Discord status boards up to date.
+servers over the network and keeps Discord status posts up to date. An optional web dashboard shows
+history and reports.
 
 ```
-                      ┌──────────────────────── lighthouse ────────────────────────┐
- game server ◄─poll── │ pollers ──► status store ──► board updater ──► Discord bots │ ──► Discord
-   (Steam query,      │   ▲            (SQLite)   ──► alerter       ──► (one per game│
-    native API)       │   │                       ──► presence          or one mega)│
-                      │ ingest ◄── heartbeats                                       │
- mod / agent ──push──►│ (HTTP)                    dashboard (local web UI)          │
-                      └─────────────────────────────────────────────────────────────┘
+                    ┌──────────────────────────── lighthouse ─────────────────────────────┐
+ game servers ◄─────┤ pollers ──► monitor ──► status posts ─┐                             │
+  (Steam query,     │              │    └───► alerts ───────┼──► Discord bots ──────────► Discord
+   Minecraft ping,  │              │    └───► status line ──┘   (one per game, or one)   │
+   FiveM HTTP)      │              ▼                                                     │
+                    │           SQLite ◄──── web dashboard (optional, local by default) ◄── browser
+                    │  (history, users, invites, blocks)                                  │
+                    └─────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Parts
 
-- **Pollers** — one task per configured server. Every `poll_interval_secs` the game's adapter queries
-  the server: the Steam query (A2S) first, then the game's own API if one is configured.
-- **Ingest** — an HTTP endpoint that accepts heartbeats from game mods and agents
-  ([format](heartbeat.md)). Heartbeats carry what a poll cannot see, such as uptime and in-game time.
-- **Status store** — merges the sources for each server (heartbeat > native API > Steam query), keeps
-  the latest status in memory and a history in SQLite.
-- **Board updater** — renders each server's card and edits its message in the status channel. It only
-  edits when the card changed, re-creates messages that were deleted, and keeps message ids in SQLite.
-- **Alerter** — posts state changes (online → offline, back online, restarted) for servers with
-  `alerts = true`.
-- **Presence** — each bot's Discord activity shows a summary, e.g. "4/5 servers up · 37 players".
-- **Dashboard** — a small local web page for editing servers and settings, bound to localhost by
-  default.
+- **Pollers** (`lighthouse-games`): one task per configured server. Every `poll_interval_secs` the
+  game's adapter asks the server for its status: the Steam server query (A2S) for most games, the
+  Minecraft server-list ping, or FiveM's `dynamic.json`. Game-specific adapters add details, such as
+  the 7 Days to Die world time and blood moon.
+- **Monitor** (`lighthouse-discord`): keeps the latest status of every server, decides when a server
+  is offline (see below), keeps uptime, and records history.
+- **Status posts, status line and alerts** (`lighthouse-discord`): each bot edits its posts in place
+  (only when the content changed), re-creates posts that were deleted, rotates its status line through
+  its servers, and posts alerts for servers with `alerts = true`. Message ids live in
+  `lighthouse.state.json`.
+- **Store** (`lighthouse-store`): one SQLite file for status history (30 days), dashboard users,
+  sessions, invites and blocked addresses.
+- **Dashboard** (`lighthouse-dashboard`): server-rendered pages, each a module (see below).
+- **The program** (`lighthouse`): command line, guided setup, bot-mode switching and the updater.
 
-Configuration can come from three places, all writing the same settings: `lighthouse.toml`, Discord
-slash commands (`/lighthouse …`, server managers only) and the dashboard.
+Settings live in `lighthouse.toml`. `lighthouse setup`, `lighthouse bot-mode` and
+`lighthouse set-password` write it for you; dashboard users and invites live in the database.
 
 ## Offline detection
 
-A server is **offline** when its poll fails twice in a row **and** no heartbeat arrived within three
-heartbeat intervals. One missed poll is not enough, which keeps boards from flickering. A clean
-shutdown heartbeat (`state = "offline"`) marks it offline at once.
+A server is shown **offline** after two failed checks in a row, so one lost packet doesn't make the
+board flicker. Alerts fire on the change from online to offline and back.
 
 ## Uptime
 
-Uptime is the time since the server process last started. Only mods and agents know it, through
-`started_at_unix`. Without a mod Lighthouse shows the time since it first saw the server come online,
-which equals uptime as long as Lighthouse itself was running at the time.
+Without a game mod, uptime is "online since Lighthouse first saw the server come up". It is kept in
+`lighthouse.state.json`, so restarting Lighthouse doesn't reset it. A server going offline resets it.
 
-## Roles and deployment
+## History
 
-The same program can run in two roles, alone or together:
+Each check is a sample, but only some are written: a change of state at once, otherwise at most one
+row per minute while the player count moves and one every two minutes when nothing changes. Samples
+older than 30 days are removed, and the database hands the space back.
 
-| Role | Does | Where |
-|---|---|---|
-| `bot` | pollers, store, Discord, dashboard, ingest | anywhere with internet access |
-| `agent` | reads local game data (status file, localhost API) and sends heartbeats | next to a game server |
+## Dashboard modules
 
-On a single machine both roles run in one process and pass heartbeats internally. With game servers on
-several machines, run `bot` once and an `agent` beside each game server that needs one.
+Every page implements the `Module` trait (`crates/lighthouse-dashboard/src/module.rs`): an id (the URL
+prefix), a title and icon for the menu, the permission needed to open it, any extra permissions it
+defines, and its routes. The router mounts each module under `/<id>` behind its permission and builds
+the menu from the pages a user may open. To add a page, write `src/modules/<name>.rs` and add it to
+`modules::all()`.
 
-| Game | Needs an agent? |
-|---|---|
-| 7 Days to Die | No. The mod sends heartbeats itself. |
-| Project Zomboid | Yes, to read the file the Lua mod writes. |
-| VEIN | Only to use the built-in HTTP API, which must not be exposed to the internet. |
+Security: sessions are random tokens in an `HttpOnly`, `SameSite=Strict` cookie; form posts must come
+from the dashboard itself; sign-up needs a single-use invite (256-bit code, stored only as a hash);
+addresses that guess codes are blocked for 30 minutes, then 3 hours, 7 days, 30 days, then until
+lifted.
 
 ## Discord limits we design around
 
-- Message edits: only on change, at most once per poll interval per message.
-- Channel renames (optional counter channels): Discord allows 2 per 10 minutes per channel.
-- Components V2 messages cannot carry `content` or `embeds`; all text lives in components, at most
+- Message edits only when something changed, at most once per check per post.
+- Components V2 messages can't carry `content` or `embeds`; all text lives in components, at most
   4000 characters per message.
-- Every request honours Discord's `retry-after` on HTTP 429.
+- Every request honours Discord's `retry-after` on HTTP 429 (handled by the Discord library).
 
 ## Adding a game
 
-1. Add a variant to `GameKind` (`crates/lighthouse-core/src/game.rs`).
-2. Implement `GameAdapter` in `crates/lighthouse-games/src/<game>.rs` and register it in `adapter_for`.
-3. If the game has its own API, add a `NativeApi` variant.
-4. Optionally write a server mod that sends [heartbeats](heartbeat.md).
+Most games need no code: add a row to the catalogue in `crates/lighthouse-core/src/catalog.rs` with
+its protocol and default ports, then run `python tools/gen_games_md.py
+crates/lighthouse-core/src/catalog.rs docs/games.md` to update the list. A game that needs special
+handling also gets an adapter in `crates/lighthouse-games/src/` registered in `adapter_for`.
+
+## Planned
+
+- **Game APIs** for richer data: the 7 Days to Die web API (player names), Project Zomboid RCON
+  (a reliable player list) and VEIN's HTTP API. The config already accepts them (`native = …`) but they
+  aren't used yet.
+- **Server-side mods and an agent** that report true uptime and more, sent as
+  [heartbeats](heartbeat.md). The `mods/` folder holds the first drafts.
+- Adding servers and bots from the dashboard, and Discord slash commands.

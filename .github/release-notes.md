@@ -1,6 +1,8 @@
 ## Setup
 
-**What you need:** a Windows 10/11 or Linux PC (or anything that runs Docker) that can reach your game servers, and a Discord server you manage. Lighthouse can run on the same machine as your game servers or anywhere else.
+**What you need:** a Windows 10/11 or Linux PC (or anything that runs Docker) that stays on and can reach your game servers, and a Discord server you manage.
+
+**Where to run it:** Lighthouse checks your servers over the network, so it doesn't have to run on the game server. With rented or managed game servers (only a control panel and FTP), run it on a home PC or a small VPS; nothing is installed on the game server. On your own machine you can run it right next to the games.
 
 ### Windows
 
@@ -44,6 +46,8 @@ The bot keeps one status post per server (or one board for all of them) up to da
 | **Experimental** (should work, defaults not verified) | 100+ games that answer the Steam server query, such as Valheim, Rust, ARK, Counter-Strike 2, Conan Exiles, DayZ, Enshrouded and V Rising, plus Minecraft Java and Bedrock, and FiveM/RedM |
 
 Run `lighthouse games` for the full list, or `lighthouse query <game> <address> [port]` to test a server before adding it. No game mods are needed.
+
+**A server shows offline?** Many games answer status on a different port from the one players join: Project Zomboid B42 on `SteamPort1` (default 8766), VEIN usually on the game port + 1. Find it with `lighthouse query`, then set `query_port` for that server. The [README](https://github.com/Hailey-Ross/hails.Lighthouse#troubleshooting) has more fixes.
 
 ## What's in it
 

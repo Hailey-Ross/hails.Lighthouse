@@ -10,7 +10,7 @@ use lighthouse_core::{
 };
 
 use crate::bots::{self, heading};
-use crate::{password, update};
+use crate::update;
 
 pub async fn run(path: &Path) -> anyhow::Result<()> {
     let theme = ColorfulTheme::default();
@@ -62,26 +62,8 @@ pub async fn run(path: &Path) -> anyhow::Result<()> {
     heading("Discord bots");
     let (mode, bots) = bots::setup_bots(&theme, &servers).await?;
 
-    heading("Status from game mods");
-    println!(
-        "The Lighthouse mods and agent send extra details (uptime, in-game time). If they run on another\n\
-         machine they need a network address and a shared secret to reach this Lighthouse."
-    );
-    let ingest = if Confirm::with_theme(&theme)
-        .with_prompt("Accept status from mods or agents on other machines?")
-        .default(false)
-        .interact()?
-    {
-        let bind: String = Input::with_theme(&theme)
-            .with_prompt("Listen address")
-            .default("0.0.0.0:8651".to_string())
-            .interact_text()?;
-        let secret = password::random_secret(32)?;
-        println!("Shared secret (put this in each mod/agent config):\n  {secret}");
-        Some(IngestConfig { bind, secret })
-    } else {
-        None
-    };
+    // Mods and agents can't send status yet, so there is nothing to ask (see docs/architecture.md).
+    let ingest: Option<IngestConfig> = None;
 
     heading("Web dashboard");
     let (dashboard, admin) = if Confirm::with_theme(&theme)
@@ -372,11 +354,12 @@ async fn ask_server(theme: &ColorfulTheme, taken: &HashSet<String>) -> anyhow::R
         .with_prompt("Post alerts when this server goes down or comes back?")
         .default(false)
         .interact()?;
-    server.native = ask_native(theme, game)?;
+    // Game APIs (7DTD web API, PZ RCON, VEIN HTTP) aren't used yet; ask once they are.
     println!("Added {} server \"{}\".", game, server.id);
     Ok(server)
 }
 
+#[allow(dead_code)] // returns once the game APIs are used
 fn ask_native(theme: &ColorfulTheme, game: GameKind) -> anyhow::Result<Option<NativeApi>> {
     let question = if game.is(GameKind::SEVEN_DAYS_TO_DIE) {
         "Also use the built-in web API? (player names) [optional]"

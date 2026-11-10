@@ -1,5 +1,8 @@
 # Heartbeat format (v1)
 
+> **Planned, not used yet.** This describes how game mods and the Lighthouse agent will report
+> status. The current version reads servers over the network only; nothing listens for heartbeats.
+
 Game mods and the Lighthouse agent report server status with a **heartbeat**: a small JSON document
 sent every 15–60 seconds. Lighthouse marks a server offline when heartbeats stop and the Steam query
 also fails.
