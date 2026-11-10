@@ -1,0 +1,89 @@
+# Builds Lighthouse for each platform and replaces a rolling release (stable or bleeding-edge).
+# Called by release.yml (main) and bleeding-edge.yml (dev).
+name: Publish
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: The rolling tag, which is also the update channel
+        required: true
+        type: string
+      prerelease:
+        description: true for a pre-release
+        required: true
+        type: boolean
+      banner:
+        description: The note under the download links
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          # Asset names must match asset_name() in crates/lighthouse/src/update.rs.
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+            asset: lighthouse-x86_64-unknown-linux-gnu
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            asset: lighthouse-x86_64-pc-windows-msvc.exe
+          # More platforms (uncomment when wanted; arm and macOS runners cost more build minutes):
+          # - { target: aarch64-unknown-linux-gnu, os: ubuntu-22.04-arm, asset: lighthouse-aarch64-unknown-linux-gnu }
+          # - { target: aarch64-apple-darwin, os: macos-14, asset: lighthouse-aarch64-apple-darwin }
+    runs-on: ${{ matrix.os }}
+    env:
+      # Baked into the program: `lighthouse --version` and the updater use them.
+      LIGHTHOUSE_CHANNEL: ${{ inputs.tag }}
+      LIGHTHOUSE_BUILD: ${{ github.run_number }}
+      LIGHTHOUSE_REVISION: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+      - run: cargo build --release --locked -p lighthouse --target ${{ matrix.target }}
+      - name: Name the binary
+        shell: bash
+        run: |
+          src=target/${{ matrix.target }}/release/lighthouse
+          [ -f "$src.exe" ] && src="$src.exe"
+          mkdir -p dist && cp "$src" "dist/${{ matrix.asset }}"
+      - uses: actions/upload-artifact@v5
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    concurrency:
+      group: publish-${{ inputs.tag }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 30
+      - uses: actions/download-artifact@v5
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          PRE: ${{ inputs.prerelease }}
+          BANNER: ${{ inputs.banner }}
+          BUILD: ${{ github.run_number }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: bash .github/publish-release.sh

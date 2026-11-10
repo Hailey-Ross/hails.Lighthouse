@@ -1,19 +1,22 @@
-//! Self-update from GitHub releases.
+//! Self-update from this project's GitHub releases, by channel.
 //!
-//! A release provides one plain binary per platform (see [`asset_name`]) and a `SHA256SUMS` file in
-//! `sha256sum` format. An update is only installed when the binary's checksum matches.
+//! Each channel is a rolling release: `stable` (rebuilt from `main`) and `bleeding-edge` (rebuilt
+//! from every commit to `dev`). A release carries one plain binary per platform (see
+//! [`asset_name`]), `SHA256SUMS`, and `release.json` with its channel, build number, commit and
+//! version. Official builds have the same details baked in (see [`this_build`]), so the updater
+//! knows whether the channel has something newer. An update is only installed when the binary's
+//! checksum matches.
 //!
 //! After installing, Lighthouse restarts itself: under a service manager (`LIGHTHOUSE_SUPERVISED`
 //! set, as in the systemd unit) it exits with [`EXIT_RESTART`] and lets the manager start it again;
 //! otherwise it launches the new binary with the same arguments and exits.
-//! Setting `LIGHTHOUSE_NO_SELF_UPDATE` (as the Docker image does) limits it to reporting new versions.
+//! Setting `LIGHTHOUSE_NO_SELF_UPDATE` (as the Docker image does) limits it to reporting new builds.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{Context, bail};
 use lighthouse_core::UpdateConfig;
-use semver::Version;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use tracing::{info, warn};
@@ -22,9 +25,46 @@ use tracing::{info, warn};
 pub const EXIT_RESTART: i32 = 75;
 
 const CHECKSUM_FILE: &str = "SHA256SUMS";
+const RELEASE_INFO: &str = "release.json";
 
-pub fn current_version() -> Version {
-    Version::parse(env!("CARGO_PKG_VERSION")).expect("package version is valid semver")
+/// What this program is. Release builds get these from the build workflow; local builds have none.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BuildInfo {
+    pub version: &'static str,
+    pub channel: Option<&'static str>,
+    pub build: Option<u64>,
+    pub revision: Option<&'static str>,
+}
+
+pub fn this_build() -> BuildInfo {
+    BuildInfo {
+        version: env!("CARGO_PKG_VERSION"),
+        channel: option_env!("LIGHTHOUSE_CHANNEL").filter(|c| !c.is_empty()),
+        build: option_env!("LIGHTHOUSE_BUILD").and_then(|b| b.parse().ok()),
+        revision: option_env!("LIGHTHOUSE_REVISION").filter(|r| !r.is_empty()),
+    }
+}
+
+impl BuildInfo {
+    /// `0.1.0, build 12 (stable, commit 947b283ad9ca)` or `0.1.0 (local build)`.
+    pub fn describe(&self) -> String {
+        match (self.build, self.channel) {
+            (Some(b), Some(c)) => {
+                let commit = self
+                    .revision
+                    .map(|r| format!(", commit {}", &r[..r.len().min(12)]))
+                    .unwrap_or_default();
+                format!("{}, build {b} ({c}{commit})", self.version)
+            }
+            _ => format!("{} (local build)", self.version),
+        }
+    }
+}
+
+/// `--version` text, computed once.
+pub fn version_text() -> &'static str {
+    static TEXT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    TEXT.get_or_init(|| this_build().describe())
 }
 
 /// Release asset name for this platform, or `None` where no prebuilt binary is published.
@@ -48,11 +88,6 @@ pub fn self_update_allowed() -> bool {
 
 #[derive(Debug, Deserialize)]
 struct GhRelease {
-    tag_name: String,
-    #[serde(default)]
-    draft: bool,
-    #[serde(default)]
-    prerelease: bool,
     html_url: String,
     #[serde(default)]
     assets: Vec<GhAsset>,
@@ -64,59 +99,100 @@ struct GhAsset {
     browser_download_url: String,
 }
 
+/// `release.json` of a channel.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct ReleaseInfo {
+    pub channel: String,
+    pub build: u64,
+    pub revision: String,
+    #[serde(default)]
+    pub version: String,
+}
+
+/// A build available on the configured channel.
 #[derive(Debug, Clone)]
 pub struct Release {
-    pub version: Version,
+    pub info: ReleaseInfo,
     pub page_url: String,
     binary_url: Option<String>,
     sums_url: Option<String>,
 }
 
-fn parse_tag(tag: &str) -> Option<Version> {
-    Version::parse(tag.trim().trim_start_matches(['v', 'V'])).ok()
+impl Release {
+    /// `0.1.0, build 14 (stable)`
+    pub fn describe(&self) -> String {
+        let version = if self.info.version.is_empty() {
+            "build"
+        } else {
+            self.info.version.as_str()
+        };
+        format!("{version}, build {} ({})", self.info.build, self.info.channel)
+    }
 }
 
-/// Pick the highest usable release from a GitHub release list.
-fn pick(releases: Vec<GhRelease>, prerelease: bool) -> Option<Release> {
-    releases
-        .into_iter()
-        .filter(|r| !r.draft && (prerelease || !r.prerelease))
-        .filter_map(|r| {
-            let version = parse_tag(&r.tag_name)?;
-            let find = |name: &str| {
-                r.assets
-                    .iter()
-                    .find(|a| a.name == name)
-                    .map(|a| a.browser_download_url.clone())
-            };
-            Some(Release {
-                version,
-                page_url: r.html_url.clone(),
-                binary_url: asset_name().and_then(find),
-                sums_url: find(CHECKSUM_FILE),
-            })
-        })
-        .max_by(|a, b| a.version.cmp(&b.version))
+/// Is `remote` (from `channel`) something this build should move to?
+///
+/// - Same channel: a higher build number.
+/// - Switched channel (e.g. bleeding-edge to stable): any different commit.
+/// - A local build (no build number): never automatically; `lighthouse update` still offers it.
+pub fn is_newer(local: &BuildInfo, remote: &ReleaseInfo) -> bool {
+    match (local.channel, local.build) {
+        (Some(c), Some(b)) if c == remote.channel => remote.build > b,
+        (Some(_), Some(_)) => local.revision != Some(remote.revision.as_str()),
+        _ => false,
+    }
 }
 
-/// The newest release that is newer than this build, if any.
-pub async fn check(config: &UpdateConfig) -> anyhow::Result<Option<Release>> {
-    let url = format!("https://api.github.com/repos/{}/releases?per_page=20", config.repo);
-    let resp = crate::http::client()
+/// The current release on the configured channel (whether or not it is newer).
+pub async fn latest(config: &UpdateConfig) -> anyhow::Result<Release> {
+    let url = format!(
+        "https://api.github.com/repos/{}/releases/tags/{}",
+        config.repo, config.channel
+    );
+    let http = crate::http::client();
+    let resp = http
         .get(&url)
         .header("Accept", "application/vnd.github+json")
         .send()
         .await
         .with_context(|| format!("could not reach GitHub ({url})"))?;
     if resp.status() == reqwest::StatusCode::NOT_FOUND {
-        bail!("GitHub repository {} not found", config.repo);
+        bail!("no {} release found in {}", config.channel, config.repo);
     }
-    let releases: Vec<GhRelease> = resp
+    let release: GhRelease = resp
         .error_for_status()?
         .json()
         .await
         .context("unexpected reply from GitHub")?;
-    Ok(pick(releases, config.prerelease).filter(|r| r.version > current_version()))
+    let find = |name: &str| {
+        release
+            .assets
+            .iter()
+            .find(|a| a.name == name)
+            .map(|a| a.browser_download_url.clone())
+    };
+    let info_url =
+        find(RELEASE_INFO).with_context(|| format!("the {} release has no {RELEASE_INFO}", config.channel))?;
+    let info: ReleaseInfo = http
+        .get(&info_url)
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await
+        .context("unreadable release.json")?;
+    Ok(Release {
+        info,
+        page_url: release.html_url.clone(),
+        binary_url: asset_name().and_then(find),
+        sums_url: find(CHECKSUM_FILE),
+    })
+}
+
+/// The channel's release, if it is newer than this build.
+pub async fn check(config: &UpdateConfig) -> anyhow::Result<Option<Release>> {
+    let release = latest(config).await?;
+    Ok(is_newer(&this_build(), &release.info).then_some(release))
 }
 
 /// Find the checksum for `name` in `sha256sum` output (`<hex>  <name>` or `<hex> *<name>`).
@@ -150,7 +226,7 @@ pub async fn install(release: &Release) -> anyhow::Result<()> {
     let sums = http.get(sums_url).send().await?.error_for_status()?.text().await?;
     let expected = checksum_for(&sums, name).with_context(|| format!("SHA256SUMS has no entry for {name}"))?;
 
-    info!(version = %release.version, "downloading update");
+    info!(release = %release.describe(), "downloading update");
     let bytes = http.get(binary_url).send().await?.error_for_status()?.bytes().await?;
     let actual = hex(&Sha256::digest(&bytes));
     if !actual.eq_ignore_ascii_case(expected) {
@@ -168,7 +244,7 @@ pub async fn install(release: &Release) -> anyhow::Result<()> {
     let result = self_replace::self_replace(&staged).context("could not replace the executable");
     let _ = std::fs::remove_file(&staged);
     result?;
-    info!(version = %release.version, "update installed");
+    info!(release = %release.describe(), "update installed");
     Ok(())
 }
 
@@ -207,17 +283,16 @@ pub async fn service(config: UpdateConfig) {
     let every = Duration::from_secs(config.check_interval_hours * 3600);
     loop {
         match check(&config).await {
-            Ok(None) => info!("Lighthouse is up to date"),
+            Ok(None) => info!("Lighthouse {} is up to date", this_build().describe()),
             Ok(Some(release)) if config.auto_install && self_update_allowed() => match install(&release).await {
                 Ok(()) => restart(),
-                Err(e) => warn!("update to {} failed: {e:#}", release.version),
+                Err(e) => warn!("update to {} failed: {e:#}", release.describe()),
             },
-            Ok(Some(release)) => {
-                warn!(
-                    "Lighthouse {} is available ({}). Run `lighthouse update` to install it.",
-                    release.version, release.page_url
-                )
-            }
+            Ok(Some(release)) => warn!(
+                "Lighthouse {} is available ({}). Run `lighthouse update` to install it.",
+                release.describe(),
+                release.page_url
+            ),
             Err(e) => warn!("update check failed: {e:#}"),
         }
         tokio::time::sleep(every).await;
@@ -228,51 +303,60 @@ pub async fn service(config: UpdateConfig) {
 mod tests {
     use super::*;
 
-    fn rel(tag: &str, prerelease: bool, with_assets: bool) -> GhRelease {
-        let assets = if with_assets {
-            vec![
-                GhAsset {
-                    name: CHECKSUM_FILE.into(),
-                    browser_download_url: format!("https://x/{tag}/sums"),
-                },
-                GhAsset {
-                    name: asset_name().unwrap_or("none").into(),
-                    browser_download_url: format!("https://x/{tag}/bin"),
-                },
-            ]
-        } else {
-            Vec::new()
-        };
-        GhRelease {
-            tag_name: tag.into(),
-            draft: false,
-            prerelease,
-            html_url: format!("https://x/{tag}"),
-            assets,
+    fn local(channel: Option<&'static str>, build: Option<u64>, revision: Option<&'static str>) -> BuildInfo {
+        BuildInfo {
+            version: "0.1.0",
+            channel,
+            build,
+            revision,
+        }
+    }
+
+    fn remote(channel: &str, build: u64, revision: &str) -> ReleaseInfo {
+        ReleaseInfo {
+            channel: channel.into(),
+            build,
+            revision: revision.into(),
+            version: "0.1.0".into(),
         }
     }
 
     #[test]
-    fn picks_highest_stable_release() {
-        let list = vec![
-            rel("v1.2.0", false, true),
-            rel("v1.10.0", false, true),
-            rel("v2.0.0-rc.1", true, true),
-        ];
-        assert_eq!(pick(list, false).unwrap().version, Version::new(1, 10, 0));
+    fn newer_builds_on_the_same_channel() {
+        let me = local(Some("stable"), Some(12), Some("aaa"));
+        assert!(is_newer(&me, &remote("stable", 13, "bbb")));
+        assert!(!is_newer(&me, &remote("stable", 12, "aaa")));
+        assert!(!is_newer(&me, &remote("stable", 11, "ccc")));
     }
 
     #[test]
-    fn prerelease_opt_in() {
-        let list = vec![rel("v1.2.0", false, true), rel("v2.0.0-rc.1", true, true)];
-        assert_eq!(pick(list, true).unwrap().version, Version::parse("2.0.0-rc.1").unwrap());
+    fn switching_channel_moves_to_any_other_commit() {
+        let me = local(Some("bleeding-edge"), Some(80), Some("aaa"));
+        assert!(is_newer(&me, &remote("stable", 12, "bbb")));
+        assert!(!is_newer(&me, &remote("stable", 12, "aaa")));
     }
 
     #[test]
-    fn ignores_bad_tags_and_finds_assets() {
-        let r = pick(vec![rel("nightly", false, true), rel("0.3.0", false, true)], false).unwrap();
-        assert_eq!(r.version, Version::new(0, 3, 0));
-        assert_eq!(r.sums_url.as_deref(), Some("https://x/0.3.0/sums"));
+    fn local_builds_are_never_replaced_automatically() {
+        assert!(!is_newer(&local(None, None, None), &remote("stable", 99, "bbb")));
+    }
+
+    #[test]
+    fn describes_builds() {
+        assert_eq!(
+            local(Some("stable"), Some(12), Some("947b283ad9ca75c4")).describe(),
+            "0.1.0, build 12 (stable, commit 947b283ad9ca)"
+        );
+        assert_eq!(local(None, None, None).describe(), "0.1.0 (local build)");
+    }
+
+    #[test]
+    fn reads_release_json() {
+        let info: ReleaseInfo = serde_json::from_str(
+            r#"{"channel":"stable","build":44,"revision":"947b","version":"0.1.0","assets":{"x":"y"}}"#,
+        )
+        .unwrap();
+        assert_eq!(info, remote("stable", 44, "947b"));
     }
 
     #[test]

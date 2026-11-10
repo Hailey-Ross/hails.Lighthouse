@@ -134,10 +134,13 @@ pub struct UpdateConfig {
     /// Hours between checks.
     #[serde(default = "default_update_interval")]
     pub check_interval_hours: u64,
-    /// Also consider releases marked as pre-release.
-    #[serde(default)]
-    pub prerelease: bool,
+    /// Release channel: `stable` (builds from `main`) or `bleeding-edge` (every commit to `dev`).
+    #[serde(default = "default_update_channel")]
+    pub channel: String,
 }
+
+/// Update channels, which are also the rolling release tags.
+pub const UPDATE_CHANNELS: [&str; 2] = ["stable", "bleeding-edge"];
 
 impl Default for UpdateConfig {
     fn default() -> Self {
@@ -146,7 +149,7 @@ impl Default for UpdateConfig {
             auto_install: false,
             repo: default_update_repo(),
             check_interval_hours: default_update_interval(),
-            prerelease: false,
+            channel: default_update_channel(),
         }
     }
 }
@@ -210,6 +213,9 @@ fn default_ingest_bind() -> String {
 }
 fn default_update_repo() -> String {
     DEFAULT_UPDATE_REPO.into()
+}
+fn default_update_channel() -> String {
+    "stable".into()
 }
 fn default_update_interval() -> u64 {
     24
@@ -284,6 +290,13 @@ impl Config {
             problems.push(format!(
                 "updates.repo {:?} must look like \"owner/name\"",
                 self.updates.repo
+            ));
+        }
+        if !UPDATE_CHANNELS.contains(&self.updates.channel.as_str()) {
+            problems.push(format!(
+                "updates.channel {:?} must be one of: {}",
+                self.updates.channel,
+                UPDATE_CHANNELS.join(", ")
             ));
         }
         if self.updates.check_interval_hours == 0 {

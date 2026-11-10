@@ -27,3 +27,6 @@ Thumbs.db
 # Python
 __pycache__/
 *.pyc
+
+# Release staging
+/dist/

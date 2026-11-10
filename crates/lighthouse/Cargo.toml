@@ -20,7 +20,6 @@ lighthouse-discord.workspace = true
 lighthouse-games.workspace = true
 reqwest.workspace = true
 self-replace = "1"
-semver = "1"
 serde.workspace = true
 serde_json.workspace = true
 sha2 = "0.10"

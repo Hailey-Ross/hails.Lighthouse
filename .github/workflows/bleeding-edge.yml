@@ -1,0 +1,22 @@
+# Every push to dev replaces the bleeding-edge pre-release.
+name: Bleeding Edge
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-bleeding-edge
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    uses: ./.github/workflows/publish.yml
+    with:
+      tag: bleeding-edge
+      prerelease: true
+      banner: "**BLEEDING EDGE, rolling build.** Built from every commit to the `dev` branch, so it may be broken. Back up your `lighthouse.toml` and database, and please report bugs. For the latest working build, use [stable](https://github.com/Hailey-Ross/hails.Lighthouse/releases/tag/stable)."

@@ -12,7 +12,7 @@ pub mod status;
 
 pub use config::{
     BotConfig, BotMode, Config, ConfigError, DEFAULT_UPDATE_REPO, DashboardConfig, IngestConfig, NativeApi,
-    ServerConfig, UpdateConfig,
+    ServerConfig, UPDATE_CHANNELS, UpdateConfig,
 };
 pub use game::{Capabilities, GameAdapter, GameKind, GameProfile, Protocol, QueryError, QueryPort, Support};
 pub use heartbeat::{HEARTBEAT_VERSION, Heartbeat};

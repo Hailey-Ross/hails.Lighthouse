@@ -112,6 +112,18 @@ pub async fn run(path: &Path) -> anyhow::Result<()> {
         } else {
             println!("Automatic install is not available here; new versions will be reported in the log.");
         }
+        updates.channel = match Select::with_theme(&theme)
+            .with_prompt("Which builds?")
+            .items(&[
+                "Stable: the latest working build (recommended)",
+                "Bleeding edge: every change as it lands; may break",
+            ])
+            .default(0)
+            .interact()?
+        {
+            0 => "stable".to_string(),
+            _ => "bleeding-edge".to_string(),
+        };
         updates.repo = Input::with_theme(&theme)
             .with_prompt("Release source (GitHub owner/repository)")
             .default(DEFAULT_UPDATE_REPO.to_string())

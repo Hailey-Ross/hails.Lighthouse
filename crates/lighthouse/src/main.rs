@@ -15,7 +15,7 @@ use lighthouse_core::{Config, GameKind, ServerConfig, ServerState, ServerStatus}
 use tracing::{error, info};
 
 #[derive(Parser)]
-#[command(name = "lighthouse", version, about = "Game server status boards for Discord")]
+#[command(name = "lighthouse", version = update::version_text(), about = "Game server status boards for Discord")]
 struct Cli {
     /// Path to the config file.
     #[arg(short, long, global = true, default_value = "lighthouse.toml")]
@@ -52,6 +52,9 @@ enum Command {
         /// Only report whether an update is available.
         #[arg(long)]
         check: bool,
+        /// Install the channel's build even if it isn't newer (or this is a local build).
+        #[arg(long)]
+        force: bool,
     },
     /// Print the status card JSON for each configured server, using placeholder data.
     PreviewCards,
@@ -228,15 +231,30 @@ async fn dispatch(cli: Cli) -> anyhow::Result<()> {
             println!("Dashboard enabled at http://{}", config.dashboard.bind);
             Ok(())
         }
-        Command::Update { check } => {
+        Command::Update { check, force } => {
             let config = load(&path).map(|c| c.updates).unwrap_or_default();
-            match update::check(&config).await? {
-                None => println!("Lighthouse {} is up to date.", update::current_version()),
-                Some(release) if check => println!("Lighthouse {} is available: {}", release.version, release.page_url),
-                Some(release) => {
-                    update::install(&release).await?;
-                    println!("Updated to {}. Restart Lighthouse to use it.", release.version);
-                }
+            let me = update::this_build();
+            let release = update::latest(&config).await?;
+            println!("This is Lighthouse {}.", me.describe());
+            println!(
+                "Latest on {}: {}  ({})",
+                config.channel,
+                release.describe(),
+                release.page_url
+            );
+            let newer = update::is_newer(&me, &release.info);
+            if check {
+                return Ok(());
+            }
+            if newer || force {
+                update::install(&release).await?;
+                println!("Updated to {}. Restart Lighthouse to use it.", release.describe());
+            } else if me.build.is_none() {
+                println!(
+                    "This is a local build, so it isn't replaced automatically. Use --force to install the release."
+                );
+            } else {
+                println!("Already up to date.");
             }
             Ok(())
         }

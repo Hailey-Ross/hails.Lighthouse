@@ -47,7 +47,7 @@ check = true                       # look for new versions
 auto_install = false               # install them automatically and restart
 repo = "Hailey-Ross/hails.Lighthouse"    # release source (owner/repository)
 check_interval_hours = 24
-prerelease = false
+channel = "stable"                 # stable (from main) or bleeding-edge (every dev commit; may break)
 
 [[servers]]
 id = "7dtd-pve"            # stable id: letters, digits, - and _

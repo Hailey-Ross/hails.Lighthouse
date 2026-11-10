@@ -1,68 +1,36 @@
+# Every push to main replaces the stable release, and adds a permanent vX.Y.Z release when the
+# version in Cargo.toml is new.
 name: Release
-
-# Push a tag like v0.2.0 to build and publish a release. The asset names must match
-# `asset_name()` in crates/lighthouse/src/update.rs, which the built-in updater downloads.
 
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
-jobs:
-  build:
-    strategy:
-      fail-fast: true
-      matrix:
-        include:
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-22.04
-            asset: lighthouse-x86_64-unknown-linux-gnu
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-22.04-arm
-            asset: lighthouse-aarch64-unknown-linux-gnu
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-            asset: lighthouse-x86_64-pc-windows-msvc.exe
-          - target: aarch64-apple-darwin
-            os: macos-14
-            asset: lighthouse-aarch64-apple-darwin
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-      - name: Check the tag matches the crate version
-        shell: bash
-        run: |
-          version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
-          [ "v$version" = "${GITHUB_REF_NAME}" ] || { echo "tag ${GITHUB_REF_NAME} != v$version"; exit 1; }
-      - run: cargo build --release --locked -p lighthouse --target ${{ matrix.target }}
-      - name: Rename binary
-        shell: bash
-        run: |
-          src=target/${{ matrix.target }}/release/lighthouse
-          [ -f "$src.exe" ] && src="$src.exe"
-          mkdir -p dist && cp "$src" "dist/${{ matrix.asset }}"
-      - uses: actions/upload-artifact@v5
-        with:
-          name: ${{ matrix.asset }}
-          path: dist/${{ matrix.asset }}
+concurrency:
+  group: release-stable
+  cancel-in-progress: true
 
-  publish:
-    needs: build
+jobs:
+  check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v5
-        with:
-          path: dist
-          merge-multiple: true
-      - name: Checksums
-        run: cd dist && sha256sum lighthouse-* > SHA256SUMS && cat SHA256SUMS
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*
-          generate_release_notes: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
+      - uses: actions/checkout@v5
+      # The version must be valid and have its own CHANGELOG.md section. Minor stable builds keep the
+      # number; raise it for notable changes.
+      - name: Check version and changelog
+        run: |
+          v=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Cargo.toml version should look like 0.1.0, not '$v'"; exit 1; }
+          grep -qx "## $v" CHANGELOG.md || { echo "CHANGELOG.md has no '## $v' section"; exit 1; }
+
+  publish:
+    needs: check
+    uses: ./.github/workflows/publish.yml
+    with:
+      tag: stable
+      prerelease: false
+      banner: "**STABLE, rolling build.** The latest working build, from the `main` branch. Please report bugs. For the newest features, try [bleeding edge](https://github.com/Hailey-Ross/hails.Lighthouse/releases/tag/bleeding-edge)."
