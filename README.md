@@ -158,8 +158,23 @@ control panel's port section.
   Conan Exiles, DayZ, Enshrouded, V Rising and many more), plus **Minecraft** Java and Bedrock, and
   **FiveM/RedM**. These should work; their default ports haven't all been checked yet.
 
-Full list with ports: [docs/games.md](docs/games.md). 7 Days to Die and VEIN don't share player
-names through the server query, so their cards show player counts only.
+Full list with ports: [docs/games.md](docs/games.md).
+
+What each game shows beyond name, players and uptime:
+
+| Game | Extra details |
+|---|---|
+| 7 Days to Die | In-game day and time, blood moon countdown. With its web API: player names and pings. |
+| Project Zomboid | Player names. With RCON: a player list that stays right on Build 42. |
+| VEIN | With its HTTP API (same machine or private network only): player names. |
+| FiveM / RedM | Server name and description, game type, version, player names (unless hidden). |
+| Minecraft | Message of the day, version, some player names; Bedrock also the game mode. |
+| Rust | Time since the last wipe. |
+| DayZ | In-game time. |
+
+7 Days to Die and VEIN don't share player names through the server query, so without their APIs the
+cards show player counts only. The setup asks about each API; they can also be added to the config
+later (see `native` in [lighthouse.example.toml](lighthouse.example.toml)).
 
 ## For developers
 

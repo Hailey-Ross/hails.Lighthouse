@@ -25,6 +25,7 @@ pub struct Player {
 /// In-game clock.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GameTime {
+    /// In-game day, or 0 when the game only reports the time of day.
     pub day: u32,
     pub hour: u8,
     pub minute: u8,
@@ -60,8 +61,28 @@ pub struct ServerStatus {
     /// Round-trip time of the query that produced this status.
     #[serde(default)]
     pub ping_ms: Option<u32>,
+    /// A short description the server advertises (FiveM project description, Minecraft MOTD).
+    #[serde(default)]
+    pub description: Option<String>,
+    /// Game mode or type (FiveM gametype, Minecraft Bedrock game mode).
+    #[serde(default)]
+    pub mode: Option<String>,
+    /// Unix time (seconds) of the last wipe, for games that report it (Rust).
+    #[serde(default)]
+    pub wiped_at_unix: Option<i64>,
     /// Unix time (seconds) this status was observed.
     pub observed_at_unix: i64,
+}
+
+impl GameTime {
+    /// `Day 14, 21:05`, or just `21:05` when the day isn't known.
+    pub fn label(&self) -> String {
+        if self.day == 0 {
+            format!("{:02}:{:02}", self.hour, self.minute)
+        } else {
+            format!("Day {}, {:02}:{:02}", self.day, self.hour, self.minute)
+        }
+    }
 }
 
 impl ServerStatus {
@@ -80,6 +101,9 @@ impl ServerStatus {
             blood_moon_in_days: None,
             password_protected: None,
             ping_ms: None,
+            description: None,
+            mode: None,
+            wiped_at_unix: None,
             observed_at_unix,
         }
     }
@@ -115,6 +139,9 @@ impl ServerStatus {
         fill(&mut self.blood_moon_in_days, &other.blood_moon_in_days);
         fill(&mut self.password_protected, &other.password_protected);
         fill(&mut self.ping_ms, &other.ping_ms);
+        fill(&mut self.description, &other.description);
+        fill(&mut self.mode, &other.mode);
+        fill(&mut self.wiped_at_unix, &other.wiped_at_unix);
         if self.players.is_empty() {
             self.players.clone_from(&other.players);
         }

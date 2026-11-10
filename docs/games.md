@@ -60,6 +60,7 @@ public query documentation and have not been checked on a live server yet. Repor
 | Day of Dragons | `day_of_dragons` | `dayofdragons` | Steam query | 7777 | 27015 |
 | Day of Infamy | `day_of_infamy` | `doi` | Steam query | 27015 | 27015 |
 | Days of War | `days_of_war` | `dow` | Steam query | 27015 | 27015 |
+| DayZ | `dayz` | `dayz_standalone` | Steam query | 2302 | 27016 |
 | DayZ Mod | `dayz_mod` | `dayzmod` | Steam query | 2302 | 2303 (port + 1) |
 | Dino D-Day | `dino_d_day` | `ddd` | Steam query | 27015 | 27015 |
 | Don't Starve Together | `dont_starve_together` | `dst` | Steam query | 10999 | 27016 |
@@ -128,4 +129,4 @@ public query documentation and have not been checked on a live server yet. Repor
 | Valheim | `valheim` |  | Steam query | 2456 | 2457 (port + 1) |
 | Zombie Panic: Source | `zombie_panic_source` | `zps` | Steam query | 27015 | 27015 |
 
-107 games in total.
+108 games in total.

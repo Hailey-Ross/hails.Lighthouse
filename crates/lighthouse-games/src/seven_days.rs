@@ -1,11 +1,11 @@
 use lighthouse_core::{Capabilities, GameAdapter, GameKind, GameTime, QueryError, ServerConfig, ServerStatus};
 
 use crate::a2s::Rules;
-use crate::steam;
+use crate::{native, steam};
 
 /// 7 Days to Die. Steam query on the game port (default 26900). Its rules carry the world time,
 /// blood moon settings and `ServerVersion`. The Steam player list has entries but no names; the
-/// web API (later) has them. Note: the `DayCount` rule is a setting, not the current day.
+/// web API (`native = { kind = "seven_days_web_api", ... }`) adds names and pings. Note: the `DayCount` rule is a setting, not the current day.
 pub struct SevenDaysToDie;
 
 /// One in-game day is 24000 world-time ticks, one hour 1000.
@@ -38,9 +38,9 @@ impl GameAdapter for SevenDaysToDie {
         GameKind::get(GameKind::SEVEN_DAYS_TO_DIE)
     }
 
-    fn capabilities(&self, _server: &ServerConfig) -> Capabilities {
+    fn capabilities(&self, server: &ServerConfig) -> Capabilities {
         Capabilities {
-            player_names: false,
+            player_names: server.native.is_some(),
             uptime: false,
             game_time: true,
             blood_moon: true,
@@ -57,6 +57,7 @@ impl GameAdapter for SevenDaysToDie {
         if status.map.is_none() {
             status.map = data.rules.get("LevelName").cloned();
         }
+        native::extra(server).await.apply(&mut status);
         Ok(status)
     }
 }

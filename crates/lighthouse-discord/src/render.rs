@@ -129,14 +129,22 @@ fn server_body(server: &ServerConfig, status: &ServerStatus, now_unix: i64, deta
             lines.push(main.join("   "));
 
             if detail != Detail::Brief {
+                if detail == Detail::Full
+                    && let Some(d) = &status.description
+                {
+                    lines.push(format!("*{}*", escape(&truncate(d, 140))));
+                }
                 let mut sub = Vec::new();
+                if let Some(mode) = &status.mode {
+                    sub.push(escape(mode));
+                }
                 if detail == Detail::Full
                     && let Some(map) = &status.map
                 {
                     sub.push(escape(map));
                 }
                 if let Some(t) = status.game_time {
-                    sub.push(format!("Day {}, {:02}:{:02}", t.day, t.hour, t.minute));
+                    sub.push(t.label());
                 }
                 if let Some(days) = status.blood_moon_in_days {
                     sub.push(match days {
@@ -144,6 +152,9 @@ fn server_body(server: &ServerConfig, status: &ServerStatus, now_unix: i64, deta
                         1 => "Blood moon tomorrow".to_string(),
                         n => format!("Blood moon in {n} days"),
                     });
+                }
+                if let Some(wiped) = status.wiped_at_unix {
+                    sub.push(format!("Wiped <t:{wiped}:R>"));
                 }
                 if detail == Detail::Full
                     && let Some(v) = &status.version
@@ -173,6 +184,16 @@ fn server_body(server: &ServerConfig, status: &ServerStatus, now_unix: i64, deta
         ServerState::Unknown => lines.push("Checking…".to_string()),
     }
     lines
+}
+
+/// Cut `s` to at most `max` characters, ending in `…` when shortened.
+fn truncate(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        return s.to_string();
+    }
+    let mut out: String = s.chars().take(max - 1).collect();
+    out.push('…');
+    out
 }
 
 fn name_line(server: &ServerConfig, status: &ServerStatus) -> String {

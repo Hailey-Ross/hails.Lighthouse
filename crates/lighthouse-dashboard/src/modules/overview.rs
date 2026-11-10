@@ -68,9 +68,12 @@ fn card(server: &ServerConfig, status: &ServerStatus, now: i64, link_uptime: boo
             dl {
                 @if online {
                     @if let Some(up) = status.uptime_secs(now) { dt { "Up for" } dd { (fmt_duration(up as i64)) } }
+                    @if let Some(d) = &status.description { dt { "About" } dd { (d) } }
+                    @if let Some(mode) = &status.mode { dt { "Mode" } dd { (mode) } }
                     @if let Some(map) = &status.map { dt { "Map" } dd { (map) } }
+                    @if let Some(w) = status.wiped_at_unix { dt { "Last wipe" } dd { (fmt_duration(now - w)) " ago" } }
                     @if let Some(t) = status.game_time {
-                        dt { "In game" } dd { "Day " (t.day) ", " (format!("{:02}:{:02}", t.hour, t.minute)) }
+                        dt { "In game" } dd { (t.label()) }
                     }
                     @if let Some(days) = status.blood_moon_in_days {
                         dt { "Blood moon" }

@@ -340,6 +340,16 @@ async fn ask_server(theme: &ColorfulTheme, taken: &HashSet<String>) -> anyhow::R
         }
     }
 
+    server.native = ask_native(theme, game)?;
+    if server.native.is_some() {
+        print!("Checking the game API ... ");
+        let _ = std::io::Write::flush(&mut std::io::stdout());
+        match lighthouse_games::check_native(&server).await {
+            Ok(_) => println!("ok."),
+            Err(e) => println!("no answer ({e}). Saved anyway; Lighthouse keeps trying."),
+        }
+    }
+
     server.show_address = Confirm::with_theme(theme)
         .with_prompt("Show the join address on the status card?")
         .default(true)
@@ -354,12 +364,10 @@ async fn ask_server(theme: &ColorfulTheme, taken: &HashSet<String>) -> anyhow::R
         .with_prompt("Post alerts when this server goes down or comes back?")
         .default(false)
         .interact()?;
-    // Game APIs (7DTD web API, PZ RCON, VEIN HTTP) aren't used yet; ask once they are.
     println!("Added {} server \"{}\".", game, server.id);
     Ok(server)
 }
 
-#[allow(dead_code)] // returns once the game APIs are used
 fn ask_native(theme: &ColorfulTheme, game: GameKind) -> anyhow::Result<Option<NativeApi>> {
     let question = if game.is(GameKind::SEVEN_DAYS_TO_DIE) {
         "Also use the built-in web API? (player names) [optional]"
@@ -378,20 +386,27 @@ fn ask_native(theme: &ColorfulTheme, game: GameKind) -> anyhow::Result<Option<Na
         return Ok(None);
     }
     let api = if game.is(GameKind::SEVEN_DAYS_TO_DIE) {
+        let secret = crate::password::random_secret(24)?;
         println!(
-            "In the server console run:  webtokens add lighthouse <secret> 0\n\
-             (and set WebDashboardEnabled=true in serverconfig.xml)"
+            "Set WebDashboardEnabled to true in serverconfig.xml, then run this in the server console\n\
+             (telnet, or the web console in your host's panel):\n\n    webtokens add lighthouse {secret} 0\n"
         );
+        let port = Input::with_theme(theme)
+            .with_prompt("Web dashboard port (WebDashboardPort)")
+            .default(8080)
+            .interact_text()?;
+        let token_name: String = Input::with_theme(theme)
+            .with_prompt("Token name")
+            .default("lighthouse".to_string())
+            .interact_text()?;
+        let token_secret: String = Password::with_theme(theme)
+            .with_prompt("Token secret (empty = the one shown above)")
+            .allow_empty_password(true)
+            .interact()?;
         NativeApi::SevenDaysWebApi {
-            port: Input::with_theme(theme)
-                .with_prompt("Web dashboard port")
-                .default(8080)
-                .interact_text()?,
-            token_name: Input::with_theme(theme)
-                .with_prompt("Token name")
-                .default("lighthouse".to_string())
-                .interact_text()?,
-            token_secret: Password::with_theme(theme).with_prompt("Token secret").interact()?,
+            port,
+            token_name,
+            token_secret: if token_secret.is_empty() { secret } else { token_secret },
         }
     } else if game.is(GameKind::PROJECT_ZOMBOID) {
         NativeApi::Rcon {

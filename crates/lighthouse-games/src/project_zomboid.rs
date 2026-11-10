@@ -1,9 +1,10 @@
 use lighthouse_core::{Capabilities, GameAdapter, GameKind, QueryError, ServerConfig, ServerStatus};
 
 use crate::a2s::Rules;
-use crate::steam;
+use crate::{native, steam};
 
-/// Project Zomboid (Build 42). Steam query on `SteamPort1` (default 8766); RCON support comes later.
+/// Project Zomboid (Build 42). Steam query on `SteamPort1` (default 8766). With RCON configured
+/// (`native = { kind = "rcon", ... }`) the player list comes from the `players` command.
 pub struct ProjectZomboid;
 
 /// B42 reports `1.0.0.0` as the INFO version; the real one is in the rules or the keywords.
@@ -24,7 +25,7 @@ impl GameAdapter for ProjectZomboid {
     }
 
     fn capabilities(&self, _server: &ServerConfig) -> Capabilities {
-        // The Steam player list carries names; RCON (later) makes it more reliable on B42.
+        // The Steam player list carries names; RCON makes it more reliable on B42.
         Capabilities {
             player_names: true,
             ..Capabilities::default()
@@ -37,6 +38,7 @@ impl GameAdapter for ProjectZomboid {
         if let Some(v) = real_version(&data.rules, data.info.keywords.as_deref()) {
             status.version = Some(v);
         }
+        native::extra(server).await.apply(&mut status);
         Ok(status)
     }
 }

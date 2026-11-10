@@ -104,7 +104,10 @@ fn chat_text(v: &Value) -> String {
 fn java_status(json: &Value, now_unix: i64) -> ServerStatus {
     let mut s = ServerStatus::new(ServerState::Online, now_unix);
     let motd = strip_formatting(&json.get("description").map(chat_text).unwrap_or_default());
-    s.name = Some(motd.lines().next().unwrap_or_default().trim().to_string()).filter(|m| !m.is_empty());
+    let mut lines = motd.lines().map(str::trim).filter(|l| !l.is_empty());
+    s.name = lines.next().map(str::to_string);
+    // The MOTD's second line is usually a tagline.
+    s.description = Some(lines.collect::<Vec<_>>().join(" ")).filter(|d| !d.is_empty());
     s.version = json
         .pointer("/version/name")
         .and_then(Value::as_str)
@@ -210,6 +213,7 @@ fn bedrock_status(reply: &[u8], now_unix: i64) -> Result<ServerStatus, QueryErro
     s.players_online = field(4).and_then(|v| v.parse().ok());
     s.players_max = field(5).and_then(|v| v.parse().ok());
     s.map = field(7);
+    s.mode = field(8);
     Ok(s)
 }
 
@@ -279,11 +283,12 @@ mod tests {
         let json: Value = serde_json::from_str(
             r#"{"version":{"name":"1.21.1","protocol":767},
                 "players":{"max":20,"online":2,"sample":[{"name":"Steve","id":"x"},{"name":"§7and 5 more","id":"y"}]},
-                "description":{"text":"§aMy ","extra":[{"text":"Server"}]}}"#,
+                "description":{"text":"§aMy ","extra":[{"text":"Server\n§7Survival, no resets"}]}}"#,
         )
         .unwrap();
         let s = java_status(&json, 0);
         assert_eq!(s.name.as_deref(), Some("My Server"));
+        assert_eq!(s.description.as_deref(), Some("Survival, no resets"));
         assert_eq!(s.version.as_deref(), Some("1.21.1"));
         assert_eq!((s.players_online, s.players_max), (Some(2), Some(20)));
         assert_eq!(s.players.len(), 1);
@@ -302,5 +307,6 @@ mod tests {
         assert_eq!(s.version.as_deref(), Some("1.21.20"));
         assert_eq!((s.players_online, s.players_max), (Some(3), Some(10)));
         assert_eq!(s.map.as_deref(), Some("Bedrock level"));
+        assert_eq!(s.mode.as_deref(), Some("Survival"));
     }
 }

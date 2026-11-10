@@ -78,11 +78,12 @@ its protocol and default ports, then run `python tools/gen_games_md.py
 crates/lighthouse-core/src/catalog.rs docs/games.md` to update the list. A game that needs special
 handling also gets an adapter in `crates/lighthouse-games/src/` registered in `adapter_for`.
 
+Game APIs (`native` in a server's config: the 7 Days to Die web API, Project Zomboid RCON, VEIN's HTTP
+API) live in `native.rs`. They run after the regular check and only add detail: if one fails, the
+regular result stands and the error is logged at debug level.
+
 ## Planned
 
-- **Game APIs** for richer data: the 7 Days to Die web API (player names), Project Zomboid RCON
-  (a reliable player list) and VEIN's HTTP API. The config already accepts them (`native = …`) but they
-  aren't used yet.
 - **Server-side mods and an agent** that report true uptime and more, sent as
   [heartbeats](heartbeat.md). The `mods/` folder holds the first drafts.
 - Adding servers and bots from the dashboard, and Discord slash commands.

@@ -61,6 +61,9 @@ show_address = true        # show "host:port" on the card so people can join
 show_players = true        # list player names (where the game shares them)
 alerts = false             # post an alert when this server goes down or comes back
 # log_dir = "C:/Games/7DaysToDieServer"   # install folder, if on this machine: the dashboard shows its logs
+# Optional: the game's own API, for player names and pings and the in-game clock. Make the token in
+# the server console:  webtokens add lighthouse <secret> 0   (WebDashboardEnabled must be true)
+# native = { kind = "seven_days_web_api", port = 8080, token_name = "lighthouse", token_secret = "<secret>" }
 
 [[servers]]
 id = "pz-main"
@@ -69,6 +72,8 @@ name = "Safehouse"
 host = "203.0.113.10"
 game_port = 16261
 query_port = 8766          # Project Zomboid B42 answers status on SteamPort1 (default 8766)
+# Optional: RCON for a reliable player list (RCONPort and RCONPassword in the server's .ini).
+# native = { kind = "rcon", port = 27015, password = "..." }
 
 [[servers]]
 id = "vein-main"
@@ -76,6 +81,9 @@ game = "vein"
 host = "203.0.113.10"
 game_port = 7777
 query_port = 7778          # VEIN usually answers status on the game port + 1
+# Optional: VEIN's HTTP API (HTTPPort) for player names. It has no password, so only use it when
+# Lighthouse runs on the same machine or a private network.
+# native = { kind = "vein_http", port = 8080 }
 
 
 # ---------------------------------------------------------------------------------------------
@@ -107,11 +115,6 @@ repo = "Hailey-Ross/hails.Lighthouse" # where releases come from
 # Planned, not used yet. Accepted so configs written now keep working later.
 # ---------------------------------------------------------------------------------------------
 
-# Game APIs for richer details, set per server:
-#   native = { kind = "seven_days_web_api", port = 8080, token_name = "lighthouse", token_secret = "..." }
-#   native = { kind = "rcon", port = 27015, password = "..." }         # Project Zomboid
-#   native = { kind = "vein_http", port = 8080 }                       # VEIN; local network only
-#
 # Status sent by game mods and the Lighthouse agent:
 # [ingest]
 # bind = "0.0.0.0:8651"

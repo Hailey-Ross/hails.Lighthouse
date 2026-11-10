@@ -1,11 +1,11 @@
 use lighthouse_core::{Capabilities, GameAdapter, GameKind, QueryError, ServerConfig, ServerStatus};
 
-use crate::steam;
+use crate::{native, steam};
 
 /// VEIN. Steam query on `-QueryPort` (default 27015; many hosts use the game port + 1).
 /// The Steam player list has entries but no names, and the version is in the `Version` rule.
-/// The `HTTPPort` API (uptime, names) comes later; it has no authentication, so only use it on
-/// localhost or a private network.
+/// The `HTTPPort` API (`native = { kind = "vein_http", ... }`) adds player names; it has no
+/// authentication, so only use it on localhost or a private network.
 pub struct Vein;
 
 #[async_trait::async_trait]
@@ -14,12 +14,17 @@ impl GameAdapter for Vein {
         GameKind::get(GameKind::VEIN)
     }
 
-    fn capabilities(&self, _server: &ServerConfig) -> Capabilities {
-        Capabilities::default()
+    fn capabilities(&self, server: &ServerConfig) -> Capabilities {
+        Capabilities {
+            player_names: server.native.is_some(),
+            ..Capabilities::default()
+        }
     }
 
     async fn query(&self, server: &ServerConfig, now_unix: i64) -> Result<ServerStatus, QueryError> {
         let data = steam::query(server).await?;
-        Ok(steam::base_status(&data, now_unix))
+        let mut status = steam::base_status(&data, now_unix);
+        native::extra(server).await.apply(&mut status);
+        Ok(status)
     }
 }
