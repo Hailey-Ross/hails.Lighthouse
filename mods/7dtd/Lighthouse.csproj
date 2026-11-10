@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Server-side 7 Days to Die mod. Build with:
+      dotnet build -c Release -p:SevenDaysServerDir="<path to the dedicated server install>"
+    The output DLL goes next to Lighthouse/ModInfo.xml; copy that folder into the server's Mods folder.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>Lighthouse</AssemblyName>
+    <RootNamespace>Lighthouse</RootNamespace>
+    <OutputPath>Lighthouse\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <SevenDaysServerDir Condition="'$(SevenDaysServerDir)' == ''">..\..\..\7DaysToDieServer</SevenDaysServerDir>
+    <ManagedDir Condition="Exists('$(SevenDaysServerDir)\7DaysToDieServer_Data\Managed')">$(SevenDaysServerDir)\7DaysToDieServer_Data\Managed</ManagedDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(ManagedDir)\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="LogLibrary">
+      <HintPath>$(ManagedDir)\LogLibrary.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

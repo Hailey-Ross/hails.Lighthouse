@@ -1,0 +1,16 @@
+[package]
+name = "lighthouse-core"
+description = "Shared types for Lighthouse: server status, config, game adapters and the heartbeat format."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+toml.workspace = true

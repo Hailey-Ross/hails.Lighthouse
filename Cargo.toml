@@ -1,0 +1,46 @@
+[workspace]
+members = ["crates/*"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+authors = ["Hailey Ross"]
+homepage = "https://github.com/Hailey-Ross"
+repository = "https://github.com/Hailey-Ross/hails.Lighthouse"
+rust-version = "1.85"
+
+[workspace.dependencies]
+lighthouse-core = { path = "crates/lighthouse-core" }
+lighthouse-games = { path = "crates/lighthouse-games" }
+lighthouse-discord = { path = "crates/lighthouse-discord" }
+lighthouse-store = { path = "crates/lighthouse-store" }
+lighthouse-dashboard = { path = "crates/lighthouse-dashboard" }
+
+argon2 = "0.5"
+async-trait = "0.1"
+axum = "0.8"
+getrandom = "0.2"
+maud = { version = "0.27", features = ["axum"] }
+rusqlite = { version = "0.37", features = ["bundled"] }
+clap = { version = "4", features = ["derive"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+# Single-threaded runtime: Lighthouse mostly waits on the network, extra worker threads only cost memory.
+tokio = { version = "1", features = ["rt", "macros", "signal", "time", "net", "io-util", "sync"] }
+toml = "0.8"
+tracing = "0.1"
+twilight-gateway = { version = "0.18", default-features = false, features = ["rustls-webpki-roots"] }
+twilight-http = { version = "0.18", default-features = false, features = ["rustls-webpki-roots"] }
+twilight-model = "0.18"
+tracing-subscriber = "0.3"
+
+# Small, lean release builds.
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true

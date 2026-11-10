@@ -1,0 +1,7 @@
+.git
+.github
+target
+mods/7dtd/obj
+mods/7dtd/bin
+*.db
+lighthouse.toml

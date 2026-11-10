@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<xml>
+  <Name value="Lighthouse" />
+  <DisplayName value="Lighthouse" />
+  <Version value="0.1.0" />
+  <Description value="Server-side status reporting for Lighthouse Discord status boards. Only needed on the dedicated server." />
+  <Author value="Hailey Ross" />
+  <Website value="https://github.com/Hailey-Ross" />
+</xml>

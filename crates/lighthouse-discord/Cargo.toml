@@ -1,0 +1,21 @@
+[package]
+name = "lighthouse-discord"
+description = "Discord side of Lighthouse: status board rendering and the bots."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+lighthouse-core.workspace = true
+lighthouse-games.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+twilight-gateway.workspace = true
+twilight-http.workspace = true
+twilight-model.workspace = true

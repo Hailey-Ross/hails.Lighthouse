@@ -1,0 +1,25 @@
+[package]
+name = "lighthouse-dashboard"
+description = "Web dashboard for Lighthouse: modular pages, users and permissions."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+axum.workspace = true
+lighthouse-core.workspace = true
+lighthouse-discord.workspace = true
+lighthouse-store.workspace = true
+maud.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+

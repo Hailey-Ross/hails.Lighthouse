@@ -1,0 +1,78 @@
+# Lighthouse example configuration.
+# Copy to lighthouse.toml and edit. Check it with: lighthouse check-config
+
+# "per_game": one Discord bot per game (default).
+# "mega":     one bot shows every server of every game on a single compact board.
+mode = "per_game"
+
+# Seconds between status checks of each server (minimum 10).
+poll_interval_secs = 30
+
+# SQLite database file (created if missing).
+database = "lighthouse.db"
+
+# One [[bots]] entry per game in per_game mode, or a single entry without `game` in mega mode.
+# Create each bot at https://discord.com/developers/applications and invite it to your server.
+[[bots]]
+game = "7dtd"                       # 7dtd | pz | vein
+token_env = "LIGHTHOUSE_7DTD_TOKEN" # or: token = "..." (keep this file private if you do)
+status_channel_id = 123456789012345678
+# alert_channel_id = 123456789012345678
+# alert_role_id = 123456789012345678
+
+[[bots]]
+game = "pz"
+token_env = "LIGHTHOUSE_PZ_TOKEN"
+status_channel_id = 123456789012345678
+
+[[bots]]
+game = "vein"
+token_env = "LIGHTHOUSE_VEIN_TOKEN"
+status_channel_id = 123456789012345678
+
+# Where game mods and agents send their status. Leave out if you only use polling.
+# [ingest]
+# bind = "0.0.0.0:8651"
+# secret = "change-me-to-a-long-random-string"
+
+# Local web dashboard. Off by default. Turn it on with `lighthouse set-password`
+# (sets the admin password and enables it) or during `lighthouse setup`.
+[dashboard]
+enabled = false
+bind = "127.0.0.1:8650"   # 127.0.0.1 = reachable from this machine only
+
+# Updates from GitHub releases.
+[updates]
+check = true                       # look for new versions
+auto_install = false               # install them automatically and restart
+repo = "Hailey-Ross/hails.Lighthouse"    # release source (owner/repository)
+check_interval_hours = 24
+prerelease = false
+
+[[servers]]
+id = "7dtd-pve"            # stable id: letters, digits, - and _
+game = "7dtd"
+name = "PvE Main"          # optional, defaults to the name the server reports
+host = "203.0.113.10"
+game_port = 26900
+# query_port = 26900       # Steam query port, if not the game's default
+show_address = true        # show host:port on the card
+show_players = true        # list player names
+alerts = false             # post up/down alerts
+# native = { kind = "seven_days_web_api", port = 8080, token_name = "lighthouse", token_secret = "..." }
+
+[[servers]]
+id = "pz-main"
+game = "pz"
+host = "203.0.113.10"
+game_port = 16261
+# native = { kind = "rcon", port = 27015, password = "..." }
+
+[[servers]]
+id = "vein-main"
+game = "vein"
+host = "203.0.113.10"
+game_port = 7777
+query_port = 27015         # VEIN answers the Steam query on its QueryPort (default 27015)
+# The VEIN HTTP API has no password. Only use it when Lighthouse runs on the same machine or private network.
+# native = { kind = "vein_http", port = 8080 }

@@ -1,0 +1,29 @@
+# Rust
+/target/
+
+# Local config and data (contain tokens / server details)
+/lighthouse.toml
+*.state.json
+*.state.json.tmp
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# 7 Days to Die mod build output
+/mods/7dtd/obj/
+/mods/7dtd/bin/
+/mods/7dtd/Lighthouse/*.dll
+/mods/7dtd/Lighthouse/*.pdb
+
+# Editors / OS
+.vs/
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc

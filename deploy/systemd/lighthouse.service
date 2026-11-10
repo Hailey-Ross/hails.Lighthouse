@@ -1,0 +1,39 @@
+# systemd unit for Lighthouse on Linux.
+#
+#   sudo useradd --system --home /var/lib/lighthouse --create-home lighthouse
+#   sudo install -d -o lighthouse -g lighthouse /var/lib/lighthouse/bin
+#   sudo install -m 755 -o lighthouse -g lighthouse lighthouse /var/lib/lighthouse/bin/lighthouse
+#   sudo -u lighthouse /var/lib/lighthouse/bin/lighthouse --config /var/lib/lighthouse/lighthouse.toml setup
+#   sudo cp lighthouse.service /etc/systemd/system/ && sudo systemctl enable --now lighthouse
+#
+# The binary lives in /var/lib/lighthouse/bin so the update service can replace it. After an
+# update Lighthouse exits with code 75 and systemd starts the new version.
+#
+# Bot tokens can also go in /etc/lighthouse/env (one VAR=value per line, mode 640) and be referenced
+# from lighthouse.toml with token_env.
+
+[Unit]
+Description=Lighthouse game server status for Discord
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=lighthouse
+Group=lighthouse
+WorkingDirectory=/var/lib/lighthouse
+EnvironmentFile=-/etc/lighthouse/env
+Environment=LIGHTHOUSE_SUPERVISED=1
+ExecStart=/var/lib/lighthouse/bin/lighthouse --config /var/lib/lighthouse/lighthouse.toml run
+Restart=on-failure
+RestartSec=10
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/lighthouse
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

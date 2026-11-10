@@ -1,0 +1,17 @@
+[package]
+name = "lighthouse-games"
+description = "Game adapters for Lighthouse: 7 Days to Die, Project Zomboid and VEIN."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+lighthouse-core.workspace = true
+reqwest.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true

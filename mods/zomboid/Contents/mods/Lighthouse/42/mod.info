@@ -1,0 +1,7 @@
+name=Lighthouse
+id=Lighthouse
+description=Server-side status reporting for Lighthouse Discord status boards. Only needed on the dedicated server.
+author=Hailey Ross
+url=https://github.com/Hailey-Ross
+modversion=0.1.0
+versionMin=42.0.0

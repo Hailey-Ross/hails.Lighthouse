@@ -1,0 +1,5 @@
+# Keep Unix line endings in the repository and on checkout (the project runs on Linux too).
+* text=auto eol=lf
+*.png binary
+*.gif binary
+*.ttf binary
