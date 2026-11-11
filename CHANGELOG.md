@@ -4,6 +4,12 @@ Stable releases have a version number, raised only for notable changes. Smaller 
 the number and get a new build number. Each version needs its own section here before it can be
 released.
 
+## Unreleased
+
+- Updater for older installs, attached to every release (Windows and Linux): updates itself first,
+  then replaces only the program; settings, the database and every other file are backed up and
+  checked byte for byte. Optionally turns on automatic updates.
+
 ## 0.1.1
 
 - Game APIs: player names and pings from the 7 Days to Die web API (plus its in-game clock), a reliable

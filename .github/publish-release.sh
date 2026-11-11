@@ -13,7 +13,7 @@ gh_release() {
   fi
 }
 
-cp lighthouse.example.toml deploy/systemd/lighthouse.service dist/
+cp lighthouse.example.toml deploy/systemd/lighthouse.service deploy/update/update-windows.ps1 deploy/update/update-linux.sh dist/
 cd dist
 
 stable=true
@@ -27,7 +27,8 @@ else
 fi
 
 binaries=$(ls lighthouse-* | grep -v '\.toml$' || true)
-sha256sum $binaries > SHA256SUMS
+# The updaters are listed too: they check the copies they fetch of themselves against this file.
+sha256sum $binaries update-windows.ps1 update-linux.sh > SHA256SUMS
 
 # The updater reads this to tell whether a newer build is out on its channel.
 {
@@ -76,6 +77,8 @@ downloads=$(
   done
   download lighthouse.example.toml "Example configuration"
   download lighthouse.service "Linux service file (systemd)"
+  download update-windows.ps1 "Updater for older installs (Windows)"
+  download update-linux.sh "Updater for older installs (Linux)"
 )
 
 commits=$(git log -15 --no-merges --format='- `%h` %s' "$SHA")
@@ -99,7 +102,7 @@ commits=$(git log -15 --no-merges --format='- `%h` %s' "$SHA")
   echo "$commits"
 } > notes.md
 
-assets=($binaries SHA256SUMS release.json lighthouse.example.toml lighthouse.service)
+assets=($binaries SHA256SUMS release.json lighthouse.example.toml lighthouse.service update-windows.ps1 update-linux.sh)
 
 gh_release delete "$TAG" --cleanup-tag --yes -R "$REPO" 2>/dev/null || true
 if $stable; then flag=--latest; else flag=--prerelease; fi

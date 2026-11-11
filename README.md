@@ -120,6 +120,31 @@ installs a new build and restarts by itself; otherwise it mentions it in the log
 - **stable** (default): the latest working build.
 - **bleeding-edge**: every change as it lands; it may break.
 
+### Updating an older install
+
+For an install that can't update itself (an old build, or update checks turned off), each release
+carries an updater. It first updates itself, then replaces only the program: settings, the
+database and every other file of the install are backed up, checked byte for byte afterwards, and
+left as they were. Add `-EnableAutoUpdates` / `--enable-auto-updates` to also turn on automatic
+updates in `lighthouse.toml`.
+
+Windows (PowerShell; finds the install by itself, or pass `-Folder`):
+
+```powershell
+Invoke-WebRequest https://github.com/Hailey-Ross/hails.Lighthouse/releases/download/stable/update-windows.ps1 -OutFile update-windows.ps1
+powershell -ExecutionPolicy Bypass -File update-windows.ps1
+```
+
+Linux (the service install in `/var/lib/lighthouse`; others: `--binary` and `--data`):
+
+```sh
+curl -fsSLO https://github.com/Hailey-Ross/hails.Lighthouse/releases/download/stable/update-linux.sh
+sudo sh update-linux.sh
+```
+
+The previous program is kept next to the new one (`.old`), and the backups go to `backups/` in the
+install folder (the newest three are kept).
+
 ## Troubleshooting
 
 #### A server shows offline but people are playing
