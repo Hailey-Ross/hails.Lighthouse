@@ -179,7 +179,7 @@ mod tests {
 
     fn servers() -> Vec<ServerConfig> {
         let mut a = ServerConfig::new("athens", GameKind::get("7dtd"), "203.0.113.10", 26900);
-        a.name = Some("Nightshade Athens".into());
+        a.name = Some("Harbour Light PvE".into());
         let b = ServerConfig::new("pz-main", GameKind::get("pz"), "203.0.113.10", 8766);
         vec![a, b]
     }
@@ -191,7 +191,7 @@ mod tests {
         let all = choices(&servers, &monitor, "");
         assert_eq!(all.as_array().unwrap().len(), 2);
         let athens = choices(&servers, &monitor, "ATH");
-        assert_eq!(athens, json!([{ "name": "Nightshade Athens", "value": "athens" }]));
+        assert_eq!(athens, json!([{ "name": "Harbour Light PvE", "value": "athens" }]));
         assert_eq!(choices(&servers, &monitor, "pz").as_array().unwrap().len(), 1);
     }
 
@@ -201,9 +201,9 @@ mod tests {
         let monitor = Monitor::new(&servers, None, Arc::new(Relay::default()));
         let one = status_reply(&servers, &monitor, Some("athens"), "Servers");
         assert_eq!(one["flags"].as_u64().unwrap() & EPHEMERAL, EPHEMERAL);
-        assert!(one.to_string().contains("Nightshade Athens"));
-        let by_name = status_reply(&servers, &monitor, Some("nightshade athens"), "Servers");
-        assert!(by_name.to_string().contains("Nightshade Athens"));
+        assert!(one.to_string().contains("Harbour Light PvE"));
+        let by_name = status_reply(&servers, &monitor, Some("harbour light pve"), "Servers");
+        assert!(by_name.to_string().contains("Harbour Light PvE"));
         let board = status_reply(&servers, &monitor, None, "Servers");
         assert!(board.to_string().contains("## Servers"));
         let missing = status_reply(&servers, &monitor, Some("nope"), "Servers");

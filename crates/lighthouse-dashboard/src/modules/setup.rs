@@ -410,7 +410,7 @@ impl ServerForm {
     }
 }
 
-/// An id from the display name: `Nightshade Athens!` -> `nightshade-athens`.
+/// An id from the display name: `Harbour Light PvE!` -> `harbour-light-pve`.
 fn slug(name: &str, game: GameKind, taken: &HashSet<String>) -> String {
     let mut base = String::new();
     for c in name.chars() {
