@@ -13,7 +13,10 @@ gh_release() {
   fi
 }
 
-cp lighthouse.example.toml deploy/systemd/lighthouse.service deploy/update/update-windows.ps1 deploy/update/update-linux.sh dist/
+cp lighthouse.example.toml deploy/systemd/lighthouse.service deploy/update/update-windows.ps1 deploy/update/update-linux.sh \n  deploy/install/install-windows.ps1 deploy/install/install-linux.sh dist/
+# Game mods, zipped as they go on the server: the folder inside each zip is the one to copy.
+(cd mods/fivem && zip -qr ../../dist/lighthouse-fivem-redm.zip lighthouse)
+(cd mods/zomboid/Contents/mods && zip -qr ../../../../dist/lighthouse-zomboid-mod.zip Lighthouse)
 cd dist
 
 stable=true
@@ -28,7 +31,8 @@ fi
 
 binaries=$(ls lighthouse-* | grep -v '\.toml$' || true)
 # The updaters are listed too: they check the copies they fetch of themselves against this file.
-sha256sum $binaries update-windows.ps1 update-linux.sh > SHA256SUMS
+extras="install-windows.ps1 install-linux.sh update-windows.ps1 update-linux.sh lighthouse-fivem-redm.zip lighthouse-zomboid-mod.zip"
+sha256sum $binaries $extras > SHA256SUMS
 
 # The updater reads this to tell whether a newer build is out on its channel.
 {
@@ -77,8 +81,12 @@ downloads=$(
   done
   download lighthouse.example.toml "Example configuration"
   download lighthouse.service "Linux service file (systemd)"
+  download install-windows.ps1 "Installer (Windows: right-click > Run with PowerShell)"
+  download install-linux.sh "Installer (Linux: sudo sh install-linux.sh)"
   download update-windows.ps1 "Updater for older installs (Windows)"
   download update-linux.sh "Updater for older installs (Linux)"
+  download lighthouse-fivem-redm.zip "FiveM / RedM resource"
+  download lighthouse-zomboid-mod.zip "Project Zomboid mod"
 )
 
 commits=$(git log -15 --no-merges --format='- `%h` %s' "$SHA")
@@ -102,7 +110,7 @@ commits=$(git log -15 --no-merges --format='- `%h` %s' "$SHA")
   echo "$commits"
 } > notes.md
 
-assets=($binaries SHA256SUMS release.json lighthouse.example.toml lighthouse.service update-windows.ps1 update-linux.sh)
+assets=($binaries SHA256SUMS release.json lighthouse.example.toml lighthouse.service $extras)
 
 gh_release delete "$TAG" --cleanup-tag --yes -R "$REPO" 2>/dev/null || true
 if $stable; then flag=--latest; else flag=--prerelease; fi

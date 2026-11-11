@@ -13,7 +13,9 @@ Tested against live servers, with game-specific details (in-game time, blood moo
 | Game | id | Aliases | Protocol | Port | Query |
 |---|---|---|---|---|---|
 | 7 Days to Die | `seven_days_to_die` | `7dtd`, `7d2d`, `sdtd` | Steam query | 26900 | 26900 |
+| GTA V (FiveM) | `fivem` | `gta5f`, `gta5_fivem` | FiveM HTTP | 30120 | 30120 |
 | Project Zomboid | `project_zomboid` | `pz`, `projectzomboid`, `zomboid` | Steam query | 16261 | 16261 |
+| Red Dead Redemption 2 (RedM) | `redm` | `rdr2r`, `rdr2_redm` | FiveM HTTP | 30120 | 30120 |
 | VEIN | `vein` |  | Steam query | 7777 | 7778 (port + 1) |
 
 ## Experimental
@@ -75,7 +77,6 @@ public query documentation and have not been checked on a live server yet. Repor
 | Garry's Mod | `garrys_mod` | `garrysmod` | Steam query | 27015 | 27015 |
 | GoldenEye: Source | `goldeneye_source` | `goldeneyesource` | Steam query | 27015 | 27015 |
 | Ground Breach | `ground_breach` | `groundbreach` | Steam query | 27015 | 27015 |
-| GTA V (FiveM) | `fivem` | `gta5f`, `gta5_fivem` | FiveM HTTP | 30120 | 30120 |
 | Half-Life 2: Deathmatch | `half_life_2_deathmatch` | `hl2d` | Steam query | 27015 | 27015 |
 | Hell Let Loose | `hell_let_loose` | `hll` | Steam query | 27015 | 27015 |
 | Hurtworld | `hurtworld` |  | Steam query | 12871 | 12881 |
@@ -103,7 +104,6 @@ public query documentation and have not been checked on a live server yet. Repor
 | Project Cars | `project_cars` | `projectcars` | Steam query | 27015 | 27016 (port + 1) |
 | Project Cars 2 | `project_cars_2` | `projectcars2` | Steam query | 27015 | 27016 (port + 1) |
 | Quake Live | `quake_live` | `quakelive` | Steam query | 27960 | 27960 |
-| Red Dead Redemption 2 (RedM) | `redm` | `rdr2r`, `rdr2_redm` | FiveM HTTP | 30120 | 30120 |
 | Red Orchestra 2 | `red_orchestra_2` | `redorchestra2` | Steam query | 7777 | 27015 |
 | rFactor 2 | `rfactor_2` | `rfactor2` | Steam query | 64299 | 64299 |
 | Rising Storm 2: Vietnam | `rising_storm_2` | `rs2v` | Steam query | 27015 | 27015 |

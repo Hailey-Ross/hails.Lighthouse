@@ -14,7 +14,9 @@ use axum::Router;
 use axum::extract::{Path, Query, State};
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
-use lighthouse_core::{BotConfig, BotMode, Config, GameKind, LocalControl, NativeApi, ServerConfig, Telnet};
+use lighthouse_core::{
+    BotConfig, BotMode, Config, GameKind, IngestConfig, LocalControl, NativeApi, Protocol, ServerConfig, Telnet,
+};
 use lighthouse_discord::setup as discord;
 use maud::{Markup, PreEscaped, html};
 
@@ -59,6 +61,8 @@ impl Module for Setup {
             .route("/bot/check", post(check_bot))
             .route("/bot/save", post(save_bot))
             .route("/bot/{index}/remove", post(remove_bot))
+            .route("/mods/on", post(mods_on))
+            .route("/mods/off", post(mods_off))
     }
 }
 
@@ -182,6 +186,7 @@ async fn page(State(state): State<AppState>, CurrentUser(user): CurrentUser, Que
                         } }
                     }
                     a.button href="/setup/bot/new" { "Add a bot" }
+                    (mods_section(config))
                     p.muted { "Saving a change restarts Lighthouse; the status posts carry on where they were." }
                 }
             }
@@ -649,6 +654,89 @@ async fn remove_server(
     match apply(&state, &config) {
         Ok(()) => restarting_page(&state, &user, &format!("Removal of \"{id}\"")),
         Err(e) => Redirect::to(&format!("/setup?err={}", urlencode(&format!("Not removed: {e}")))).into_response(),
+    }
+}
+
+// ---------- game mods ----------
+
+/// The heartbeat port the FiveM/RedM resource and the 7 Days to Die mod report to.
+fn mods_section(config: &Config) -> Markup {
+    let uses_mods = config
+        .servers
+        .iter()
+        .any(|s| s.game.protocol() == Protocol::FiveM || s.game.is(GameKind::SEVEN_DAYS_TO_DIE));
+    html! {
+        h2 { "Game mods" }
+        p.muted {
+            "The FiveM/RedM resource and the 7 Days to Die mod send Lighthouse their status (players, uptime, "
+            "txAdmin bans, the console). They need this switched on. "
+            a href="https://github.com/Hailey-Ross/hails.Lighthouse/blob/main/docs/mods.md" target="_blank" rel="noopener" { "Guide" }
+        }
+        @match &config.ingest {
+            None => {
+                @if !uses_mods { p.muted.small { "None of your servers needs it yet." } }
+                form method="post" action="/setup/mods/on" { button type="submit" { "Turn on" } }
+            }
+            Some(ingest) => {
+                @let port = ingest.bind.rsplit(':').next().unwrap_or("8651");
+                p.notice { "On, listening on port " b { (port) } "." }
+                p { "For FiveM or RedM, add these lines to the server's " code { "server.cfg" } " (replace "
+                    i { "this-computer" } " with this computer's public address):" }
+                pre.example {
+                    "set lighthouse_url \"http://this-computer:" (port) "\"\n"
+                    "set lighthouse_secret \"" (ingest.secret) "\"\n"
+                    "set lighthouse_server_id \"<the server's id from the list above>\"\n"
+                    "add_ace resource.lighthouse command.quit allow\n"
+                    "ensure lighthouse"
+                }
+                p.muted.small {
+                    "The game server has to reach this computer on port " (port) ". On a home internet connection, "
+                    "forward that port to this computer in your router. Keep the secret private."
+                }
+                form method="post" action="/setup/mods/off" onsubmit="return confirm('Turn off? Mods stop reporting until it is on again.')" {
+                    button.danger type="submit" { "Turn off" }
+                }
+            }
+        }
+    }
+}
+
+async fn mods_on(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> Response {
+    if !user.can(MANAGE) {
+        return forbidden(&state, &user);
+    }
+    let mut config = match current(&state) {
+        Ok(c) => c,
+        Err(e) => return Redirect::to(&format!("/setup?err={}", urlencode(&e))).into_response(),
+    };
+    if config.ingest.is_none() {
+        let secret = match lighthouse_store::random_secret() {
+            Ok(s) => s,
+            Err(e) => return Redirect::to(&format!("/setup?err={}", urlencode(&e.to_string()))).into_response(),
+        };
+        config.ingest = Some(IngestConfig {
+            bind: "0.0.0.0:8651".to_string(),
+            secret,
+        });
+    }
+    match apply(&state, &config) {
+        Ok(()) => restarting_page(&state, &user, "Game mod reporting"),
+        Err(e) => Redirect::to(&format!("/setup?err={}", urlencode(&format!("Not saved: {e}")))).into_response(),
+    }
+}
+
+async fn mods_off(State(state): State<AppState>, CurrentUser(user): CurrentUser) -> Response {
+    if !user.can(MANAGE) {
+        return forbidden(&state, &user);
+    }
+    let mut config = match current(&state) {
+        Ok(c) => c,
+        Err(e) => return Redirect::to(&format!("/setup?err={}", urlencode(&e))).into_response(),
+    };
+    config.ingest = None;
+    match apply(&state, &config) {
+        Ok(()) => restarting_page(&state, &user, "Turning off game mod reporting"),
+        Err(e) => Redirect::to(&format!("/setup?err={}", urlencode(&format!("Not saved: {e}")))).into_response(),
     }
 }
 

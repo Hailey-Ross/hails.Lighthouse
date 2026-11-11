@@ -1,149 +1,175 @@
-# Game APIs, mods and server controls
+# Game extras
 
-Lighthouse works without any of this: it reads every server over the network the way the in-game
-server browser does. The extras below add real uptime, player names, a live console, moderation and
-server controls (start, stop, restart, messages, kicks, bans) on the dashboard.
+Lighthouse works without any of this. These extras let it see more of each game: the **real uptime**
+(not just "since Lighthouse noticed"), **player names**, a **live console**, and **buttons on the
+dashboard** to restart a server, send a message, kick or ban.
 
-| Game | Without extras | With the game's own API | With the Lighthouse mod |
-|---|---|---|---|
-| 7 Days to Die | Name, players, day and time, blood moon | **Web API**: real uptime, player names and pings, exact blood moon day, live console, all controls | Same, plus works when the web API port can't be reached |
-| Project Zomboid | Name, players, version | **RCON**: reliable player list, all controls except start | Real uptime and game time (same machine only) |
-| VEIN | Name, players, version | **HTTP API**: real uptime, player names | (VEIN has no mods) |
-| FiveM / RedM | Name, description, game type, players | — | **Lighthouse resource**: real uptime, player ids, txAdmin events, scheduled restarts, live console, bans, controls |
+Pick your game:
 
-Every control action is recorded with who did it (Moderation › Activity). Dashboard users need the
-matching permissions (Users page): *Start, stop and restart servers*, *Send messages*, *Kick
-players*, *Ban players and lift bans*.
+- [7 Days to Die](#7-days-to-die): switch on its built-in web dashboard (two settings). Recommended.
+- [Project Zomboid](#project-zomboid): switch on RCON (two settings).
+- [VEIN](#vein): switch on its HTTP API (one setting).
+- [FiveM and RedM](#fivem-and-redm-works-with-txadmin): copy the Lighthouse resource onto the server.
+
+All of these are done in two places: your **game host's control panel** (or the server's files),
+and the **Setup** page of Lighthouse's dashboard. Each section says exactly what to do in each.
+
+Who may press the buttons is up to you: on the dashboard's **Users** page, tick *Start, stop and
+restart servers*, *Send messages*, *Kick players* or *Ban players* for each admin. Everything anyone
+does is listed under **Moderation › Activity**, with their name.
+
+---
 
 ## 7 Days to Die
 
-### Web API (recommended)
+7 Days to Die has a web dashboard built in. Lighthouse can use it to read player names, the real
+uptime, the exact blood moon day and the server console, and to restart, message, kick and ban.
+Nothing to install.
 
-No mod needed, works on rented servers whose web dashboard port is reachable.
+**In your game host's control panel:**
 
-1. In `serverconfig.xml`: `WebDashboardEnabled` = `true` (port: `WebDashboardPort`, default 8080).
-2. In the server console (telnet or your host's web console), make a token. The secret may only
-   contain letters, digits and `_`:
+1. Open the server's settings (the file is called `serverconfig.xml`; many hosts show it as a list of
+   settings).
+2. Set **WebDashboardEnabled** to `true`. Note **WebDashboardPort** (usually `8080`).
+3. Restart the game server.
+4. Open the server **console** (many hosts call it *Web Console* or *Console*) and type this, with a
+   password of your own instead of `MySecret_123` (use only letters, digits and `_`):
    ```
-   webtokens add lighthouse <secret> 0
+   webtokens add lighthouse MySecret_123 0
    ```
-3. In `lighthouse.toml`, on the server:
-   ```toml
-   native = { kind = "seven_days_web_api", port = 8080, token_name = "lighthouse", token_secret = "<secret>" }
-   ```
-   (`lighthouse setup` asks for this and makes a secret for you.)
 
-Unlisted servers (`ServerVisibility` 0) don't answer the network status check at all; with the web
-API set up they still show correctly.
+**On Lighthouse's dashboard:** **Setup** → click the server → under **Game API** choose
+**7 Days to Die web API** → enter the port from step 2, the token name `lighthouse` and your
+password → click **Test**, then **Save**.
 
-### Telnet (controls only)
+If the test says the API didn't answer, the host may block that port from outside: ask them to open
+it, or check their panel's port settings.
 
-If the web API isn't available: `TelnetEnabled` `true`, a `TelnetPassword`, then
-`telnet = { port = 8081, password = "..." }` on the server.
+<details><summary>Advanced: telnet, and the Lighthouse mod</summary>
 
-### The Lighthouse mod
+- **Telnet** (buttons only, if the web dashboard isn't available): set `TelnetEnabled` to `true` and a
+  `TelnetPassword`, then enter the telnet port and password on the Setup page.
+- **The Lighthouse mod** (`mods/7dtd`): for servers whose web dashboard Lighthouse can't reach. The mod
+  reports to Lighthouse instead (Lighthouse's **Game mods** switch on the Setup page must be on, and
+  the game server must be able to reach Lighthouse). It has to be built from source with the .NET SDK
+  against your server's own game files:
+  `dotnet build -c Release -p:SevenDaysServerDir="C:\path\to\7DaysToDieServer"`, then copy
+  `mods/7dtd/Lighthouse` into the server's `Mods` folder and fill in `Config.xml` (copy it from
+  `Config.example.xml`).
 
-A server-side mod (`mods/7dtd`) that sends Lighthouse a heartbeat every 30 seconds and carries out
-dashboard commands. Use it when Lighthouse can't reach the server's web API (it only needs to reach
-Lighthouse). Needs `[ingest]` in `lighthouse.toml`.
+Unlisted servers (`ServerVisibility` 0) don't answer the usual status check; with the web API set up
+Lighthouse still shows them correctly.
 
-1. Build it (needs the .NET SDK and a 7 Days to Die dedicated server install for its DLLs):
-   ```
-   cd mods/7dtd
-   dotnet build -c Release -p:SevenDaysServerDir="C:\path\to\7DaysToDieServer"
-   ```
-2. Copy `mods/7dtd/Lighthouse` to the server's `Mods` folder.
-3. Copy `Config.example.xml` to `Config.xml` there and fill in Lighthouse's address, the ingest secret
-   and the server's id.
+</details>
+
+---
 
 ## Project Zomboid
 
-### RCON
+Project Zomboid's **RCON** gives Lighthouse a reliable player list and the buttons (restart, stop,
+message, kick, ban).
 
-Set `RCONPort` and `RCONPassword` in the server's `.ini`, then on the server in `lighthouse.toml`:
+**In your game host's control panel**, in the server's settings (the file ending in `.ini`, e.g.
+`servertest.ini`):
 
-```toml
-native = { kind = "rcon", port = 27015, password = "..." }
-```
+1. Set **RCONPort** (often `27015`) and **RCONPassword** to a password of your own.
+2. Restart the game server.
 
-This works from anywhere that can reach the RCON port. Project Zomboid's mods can't add RCON commands
-(the game's command list is fixed in its Java code) or make network requests, so real uptime and game
-time need the status file below.
+**On Lighthouse's dashboard:** **Setup** → click the server → **Game API**: **Project Zomboid RCON**
+→ enter the port and password → **Test** → **Save**.
 
-### The Lighthouse mod (same machine)
+Bans from the dashboard use Project Zomboid's own ban list, and are permanent.
 
-`mods/zomboid` writes `Zomboid/Lua/lighthouse_status.json` every 30 seconds. Install it like any
-local mod (`Zomboid/mods/Lighthouse`, add `Lighthouse` to `Mods=` in the server's `.ini`), then point
-the server's `status_file` in `lighthouse.toml` at that file. Project Zomboid pauses with nobody
-online, so the file stops updating then; Lighthouse keeps using its start time.
+<details><summary>Advanced: the Lighthouse mod (same computer only)</summary>
 
-Status (the network check) answers on the game port (`DefaultPort`, default 16261).
+Project Zomboid's mods can't talk to the network, so the real uptime and in-game time only work when
+Lighthouse runs on the same computer as the game server. Download `lighthouse-zomboid-mod.zip` from
+the [releases page](https://github.com/Hailey-Ross/hails.Lighthouse/releases/latest), unzip it into
+`Zomboid/mods/`, add `Lighthouse` to `Mods=` in the server's `.ini`, and on the Setup page put the
+path of `Zomboid/Lua/lighthouse_status.json` in **Mod status file**.
+
+The status check uses the game port (`DefaultPort`, usually 16261).
+
+</details>
+
+---
 
 ## VEIN
 
-VEIN has no mods. Its HTTP API gives player names and real uptime:
+VEIN's HTTP API gives Lighthouse the real uptime and player names. (VEIN has no mods.)
 
-1. In `Game.ini` (`Vein/Saved/Config/WindowsServer/` or `LinuxServer/`):
+**In the server's files** (folder `Vein/Saved/Config/WindowsServer/`, or `LinuxServer/`):
+
+1. In `Game.ini`, under the line `[/Script/Vein.VeinGameSession]`, add:
    ```ini
-   [/Script/Vein.VeinGameSession]
    HTTPPort=8085
    ```
-2. The API only listens on the server itself. To reach it from another machine, add to `Engine.ini`
-   in the same folder:
+2. If Lighthouse runs on **another** computer, also add to `Engine.ini` in the same folder:
    ```ini
    [HTTPServer.Listeners]
    DefaultBindAddress=0.0.0.0
    ```
-   **The API has no password.** Open its port only to the machine Lighthouse runs on.
-3. On the server in `lighthouse.toml`: `native = { kind = "vein_http", port = 8085 }`.
+   **This API has no password.** Ask your host (or set your firewall) to allow that port only from
+   the computer Lighthouse runs on.
+3. Restart the game server.
 
-If Lighthouse runs on the same machine, `process = "VeinServer"` also gives the real uptime (when
-only one VEIN server runs there).
+**On Lighthouse's dashboard:** **Setup** → click the server → **Game API**: **VEIN HTTP API** → port
+`8085` → **Test** → **Save**.
 
-## FiveM and RedM (with txAdmin)
+---
 
-The Lighthouse resource (`mods/fivem/lighthouse`) works on both and alongside txAdmin. Needs
-`[ingest]` in `lighthouse.toml`.
+## FiveM and RedM (works with txAdmin)
 
-1. Copy `mods/fivem/lighthouse` to the server's `resources` folder.
-2. In `server.cfg`:
-   ```
-   set lighthouse_url "http://<lighthouse address>:8651"
-   set lighthouse_secret "<ingest secret>"
-   set lighthouse_server_id "<the server's id in lighthouse.toml>"
-   add_ace resource.lighthouse command.quit allow
-   ensure lighthouse
-   ```
-   Use `set`, never `setr`, for the secret. The `add_ace` line lets the dashboard restart the server
-   (txAdmin starts it again after it quits); without it, restart and stop aren't offered.
+The **Lighthouse resource** runs on your FiveM or RedM server. It gives Lighthouse the real uptime,
+the players, the console, and every txAdmin ban, warning, kick and scheduled restart (shown on the
+**Moderation** page and the Discord post). It also lets you **restart**, **message**, **kick** and
+**ban** from the dashboard.
 
-What it reports: players with their identifiers, real uptime, the next scheduled txAdmin restart
-(shown on the Discord card), console output, and every txAdmin ban, warning, kick, revoke,
-announcement, scheduled or skipped restart and shutdown (Moderation page).
+**1. Switch on Lighthouse's game mod connection.** On the dashboard: **Setup** → **Game mods** →
+**Turn on**. The page then shows the lines for step 3.
 
-**Bans from the dashboard:** txAdmin doesn't let other resources create bans, so Lighthouse keeps
-its own ban list and the resource enforces it: banned players are refused when they connect and
-dropped if online. The resource keeps a copy, so bans hold while Lighthouse is down. A ban can cover
-one server or all FiveM/RedM servers; ban online players from their row, or anyone by identifier
-(`license:…`, `discord:…`, `steam:…`, `fivem:…`).
+**2. Put the resource on the server.** Download `lighthouse-fivem-redm.zip` from the
+[releases page](https://github.com/Hailey-Ross/hails.Lighthouse/releases/latest) and unzip it. Upload
+the `lighthouse` folder into the server's `resources` folder (with your host's file manager, or FTP).
 
-## Commands on the same machine
+**3. Add the lines to `server.cfg`.** Copy them from the Setup page; they look like this:
 
-For servers Lighthouse can manage directly (a service, a script, a container), give it commands for
-the Start, Stop and Restart buttons; they run through the system shell:
-
-```toml
-control = { start = "systemctl start vein", stop = "systemctl stop vein", restart = "systemctl restart vein" }
+```
+set lighthouse_url "http://<Lighthouse's address>:8651"
+set lighthouse_secret "<the secret shown on the Setup page>"
+set lighthouse_server_id "<the server's id on the Setup page>"
+add_ace resource.lighthouse command.quit allow
+ensure lighthouse
 ```
 
-These take priority over the mod and the game console. `lighthouse control <server> <action>` runs
-the same actions from the command line (except those that go through a mod).
+- `<Lighthouse's address>` is the public address of the computer Lighthouse runs on.
+- The `add_ace` line allows restarts from the dashboard (txAdmin starts the server again afterwards).
+  Without it, the restart and stop buttons aren't offered.
+- Keep the secret private, and use `set` (never `setr`) for it.
 
-## Live logs
+**4. Restart the FiveM/RedM server.** Within a minute the Setup page's test and the dashboard show it.
 
-Logs › a server:
+**The one technical bit:** the game server must be able to reach Lighthouse on port **8651**. If
+Lighthouse runs on a home internet connection, forward port 8651 to that computer in your router
+(search the web for your router's name and "port forwarding"). A small rented server (VPS) usually
+needs nothing.
 
-- **Log files** (server on this machine): set `log_dir` to its install or data folder. *Follow*
-  shows new lines as they're written.
-- **Live console**: 7 Days to Die with the web API (read from the server), or any server whose mod
-  sends console lines (the last 1000 are kept).
+**Bans from the dashboard:** txAdmin doesn't let other resources create bans, so Lighthouse keeps its
+own ban list and the resource enforces it: banned players can't join and are removed if they're
+online. The resource keeps a copy, so bans still work while Lighthouse is offline. A ban can cover one
+server or all your FiveM/RedM servers. Ban someone from the **Moderation** page: from their row while
+they're online, or anytime by their identifier (`license:…`, `discord:…`; txAdmin's player page shows
+them).
+
+---
+
+## For servers on the same computer as Lighthouse
+
+- **Live logs:** on the Setup page, put the game server's folder in **Log folder**. The **Logs** page
+  then shows its log files and follows them live.
+- **Start, stop and restart commands:** if you manage the server with a service or script, put the
+  commands in **Start / Stop / Restart command** on the Setup page. They're used before anything else.
+- **Real uptime without extras:** put the server program's name (e.g. `VeinServer`) in
+  **Program name**. Works when only one copy of that program runs on the computer.
+
+The format the mods use to report, for developers: [heartbeat.md](heartbeat.md).

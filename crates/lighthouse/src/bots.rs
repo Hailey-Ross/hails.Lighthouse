@@ -161,6 +161,38 @@ async fn ask_channel(theme: &ColorfulTheme, token: &str, prompt: &str, optional:
     }
 }
 
+/// Pick a channel from the ones the bot can see; fall back to typing its ID (needs Discord's
+/// Developer Mode) when the list can't be fetched or the channel isn't in it.
+async fn pick_channel(theme: &ColorfulTheme, token: &str, prompt: &str, optional: bool) -> anyhow::Result<Option<u64>> {
+    let channels = lighthouse_discord::setup::channels(token).await.unwrap_or_default();
+    if !channels.is_empty() {
+        let mut items: Vec<String> = channels.iter().map(|c| format!("{} › #{}", c.guild, c.name)).collect();
+        items.push("Another channel (type its ID)".to_string());
+        if optional {
+            items.push("None".to_string());
+        }
+        let choice = Select::with_theme(theme)
+            .with_prompt(prompt)
+            .items(&items)
+            .default(0)
+            .interact()?;
+        if choice < channels.len() {
+            println!("  ✓ #{}", channels[choice].name);
+            return Ok(Some(channels[choice].id));
+        }
+        if optional && choice == channels.len() + 1 {
+            return Ok(None);
+        }
+    } else {
+        println!("  The bot isn't in a Discord server yet (finish the invite step), or Discord didn't answer.");
+    }
+    println!(
+        "  To get a channel's ID: in Discord turn on Developer Mode (User Settings → Advanced), then\n  \
+         right-click the channel and choose \"Copy Channel ID\"."
+    );
+    ask_channel(theme, token, &format!("{prompt} ID"), optional).await
+}
+
 // ---------- the walkthrough ----------
 
 /// Walk the user through creating one bot in the Developer Portal and return its config.
@@ -236,12 +268,8 @@ pub async fn guided_bot(theme: &ColorfulTheme, game: Option<GameKind>) -> anyhow
     }
     pause(theme)?;
 
-    println!(
-        "Step 6 of 6: the status channel\n  \
-         In Discord turn on Developer Mode (User Settings → Advanced), then right-click the\n  \
-         channel the status board should go in and choose \"Copy Channel ID\"."
-    );
-    let status_channel_id = ask_channel(theme, &token, "Status channel ID", false)
+    println!("Step 6 of 6: the status channel\n  Pick the channel the status post should go in.");
+    let status_channel_id = pick_channel(theme, &token, "Status channel", false)
         .await?
         .expect("required channel");
 
@@ -250,7 +278,7 @@ pub async fn guided_bot(theme: &ColorfulTheme, game: Option<GameKind>) -> anyhow
         .default(false)
         .interact()?
     {
-        let channel = ask_channel(theme, &token, "Alert channel ID (can be the same channel)", false).await?;
+        let channel = pick_channel(theme, &token, "Alert channel (can be the same channel)", false).await?;
         let role = ask_id(
             theme,
             "Role to ping with alerts (right-click role → Copy Role ID; empty = none)",

@@ -96,8 +96,8 @@ pub async fn run(path: &Path) -> anyhow::Result<()> {
 
     heading("Web dashboard");
     let (dashboard, admin) = if Confirm::with_theme(&theme)
-        .with_prompt("Enable the web dashboard? (off by default, you can turn it on later)")
-        .default(false)
+        .with_prompt("Turn on the web dashboard? (recommended: it's where you add servers, bots and admins)")
+        .default(true)
         .interact()?
     {
         let (d, a) = ask_dashboard(&theme)?;

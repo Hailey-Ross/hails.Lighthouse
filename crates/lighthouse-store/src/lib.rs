@@ -249,6 +249,11 @@ fn sha256_hex(text: &str) -> String {
         .collect()
 }
 
+/// 256 random bits as hex: for secrets other parts of Lighthouse generate (e.g. the mod secret).
+pub fn random_secret() -> Result<String> {
+    random_token()
+}
+
 fn random_token() -> Result<String> {
     let mut b = [0u8; 32];
     getrandom::getrandom(&mut b).map_err(|e| StoreError::Hash(e.to_string()))?;

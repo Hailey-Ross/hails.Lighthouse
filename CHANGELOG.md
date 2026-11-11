@@ -6,6 +6,16 @@ released.
 
 ## Unreleased
 
+- One-file installers for Windows and Linux, attached to every release: they download Lighthouse,
+  ask the setup questions, keep it running in the background and start it with the computer.
+  Running one again updates and keeps everything.
+- The FiveM/RedM resource and the Project Zomboid mod are attached to every release as zips.
+- README and the game extras guide rewritten step by step for people new to all this.
+- Setup lists the bot's channels to pick from instead of asking for a channel ID, and turns the
+  dashboard on by default.
+- Dashboard Setup page: a Game mods switch that turns on the connection the FiveM/RedM resource and
+  the 7 Days to Die mod report to, and shows the lines for server.cfg.
+- FiveM and RedM are now fully supported (tested on live servers).
 - Updater for older installs, attached to every release (Windows and Linux): updates itself first,
   then replaces only the program; settings, the database and every other file are backed up and
   checked byte for byte. Optionally turns on automatic updates.

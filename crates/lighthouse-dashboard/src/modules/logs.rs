@@ -539,11 +539,7 @@ async fn console(State(state): State<AppState>, CurrentUser(user): CurrentUser, 
     if let Some(remote) = lighthouse_games::native::remote_log(server, None).await {
         let (initial, next, note) = match remote {
             Ok((lines, next)) => (
-                lines.join(
-                    "
-",
-                ) + "
-",
+                lines.join("\n") + "\n",
                 next,
                 "Read from the server's web API.".to_string(),
             ),
@@ -597,11 +593,7 @@ async fn console_poll(
                 let text = if lines.is_empty() {
                     String::new()
                 } else {
-                    lines.join(
-                        "
-",
-                    ) + "
-"
+                    lines.join("\n") + "\n"
                 };
                 Json(PollReply {
                     next: next.to_string(),

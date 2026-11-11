@@ -4,207 +4,269 @@
 
 **Calm, clear game server status for Discord.**
 
-Lighthouse watches your game servers and keeps a tidy status post for each one in a Discord channel,
-updated in place: online or offline, players, time since the last restart, map, version, and (for
-7 Days to Die) the in-game day and the next blood moon. The bot's status line rotates through your
-servers, and it can post an alert when a server goes down or comes back.
+Lighthouse keeps a tidy status post in your Discord channel for each of your game servers: is it
+online, who's playing, how long since the last restart, and for 7 Days to Die the in-game day and
+the next blood moon. The post updates itself; nobody has to do anything. People can also type
+`/status` in Discord to check the servers.
 
-An optional web dashboard adds uptime history, population reports, server logs, and accounts for
-your admins.
+It comes with a web page for you and your admins (the **dashboard**): uptime history, player
+reports, server logs, and buttons to restart servers or ban players.
 
-> **Status:** early. It works and is tested against live servers; expect rough edges until 1.0.
+> **Status:** early. It works and is tested on live servers; expect rough edges until version 1.0.
+
+**New here? Follow [Getting started](#getting-started) from top to bottom.** No programming needed.
 
 ## Contents
 
-- [What you need](#what-you-need)
-- [Quick start](#quick-start)
-- [Where to run it](#where-to-run-it)
-- [Everyday commands](#everyday-commands)
-- [The web dashboard](#the-web-dashboard)
+- [Getting started](#getting-started)
+  1. [Make a Discord bot](#1-make-a-discord-bot)
+  2. [Install Lighthouse](#2-install-lighthouse)
+  3. [Answer the setup questions](#3-answer-the-setup-questions)
+  4. [Open the dashboard](#4-open-the-dashboard)
+- [Extras for your games](#extras-for-your-games)
 - [Updates](#updates)
-- [Troubleshooting](#troubleshooting)
+- [Something isn't working](#something-isnt-working)
 - [Supported games](#supported-games)
+- [Reference](#reference) (commands, settings file, running it yourself)
 - [For developers](#for-developers)
 
-## What you need
+## Getting started
 
-- A **Windows 10/11 or Linux** computer that stays on: a home PC, a small VPS, or the machine your
-  game servers run on. Docker works too.
-- A **Discord server** where you can manage channels.
-- Each game server's **address and port**. No game mods are needed.
+### What you need
 
-## Quick start
+- **A computer that stays on**, running **Windows 10 or 11** or **Linux**. It does **not** have to be
+  the computer your game servers run on: your own PC is fine as long as it's on, or a small rented
+  server (a "VPS"). If your game servers are rented from a host, run Lighthouse on any other computer;
+  nothing gets installed on the game servers.
+- **A Discord server** where you're an admin (you can add bots and channels).
+- For each game server: **its address and port**. Your game host's control panel shows them, usually
+  as something like `203.0.113.10:26900` (the part before the `:` is the address, the number after it
+  is the port).
 
-1. **Download** Lighthouse for your system from the
-   [latest release](https://github.com/Hailey-Ross/hails.Lighthouse/releases/latest), put it in a
-   folder of its own, and rename it:
-   - **Windows:** `lighthouse-x86_64-pc-windows-msvc.exe` → `lighthouse.exe`
-   - **Linux:** `lighthouse-x86_64-unknown-linux-gnu` → `lighthouse`, then make it runnable with
-     `chmod +x lighthouse`
-2. **Run the setup** in a terminal in the same folder: `lighthouse setup`
-   (on Windows `.\lighthouse setup`). It walks you through everything:
-   - **Your servers:** start typing the game's name to pick it, then the address, port and a
-     display name. Lighthouse checks each server answers before moving on.
-   - **Your Discord bot:** step by step through Discord's Developer Portal (what to click, which
-     switches to leave off), checks your token, and gives you the link that adds the bot to your
-     server with the right permissions.
-   - **Optional extras:** the web dashboard, and automatic updates.
-3. **Start it:** `lighthouse run`. Within about 30 seconds the bot posts the status board in your
-   channel and keeps it up to date.
+### 1. Make a Discord bot
 
-Prefer the browser? The first question of the setup offers a **quick setup** that only sets a
-dashboard password.
+Lighthouse posts through a Discord bot that belongs to you. Making one takes about three minutes:
 
-The release page has more detailed steps for Windows, Linux (including running it as a background
-service) and Docker.
+1. Open the [Discord Developer Portal](https://discord.com/developers/applications) and sign in with
+   your normal Discord account.
+2. Click **New Application** (top right). Give it a name people will see, like *Server Status*, tick
+   the box to agree, and click **Create**.
+3. On the left, click **Bot**. Under the bot's name, click **Reset Token**, then **Yes, do it!**, then
+   **Copy**. That long text is the bot's **token**: Lighthouse needs it in a moment.
+   - Keep the token secret: anyone who has it can control your bot. If it ever leaks, click
+     **Reset Token** again and give Lighthouse the new one.
+   - You don't need to change anything else on that page.
+4. Keep this page open; you'll come back for the invite link (the setup gives it to you).
 
-## Where to run it
+### 2. Install Lighthouse
 
-Lighthouse checks your servers over the network, the same way the in-game server browser does, so it
-**does not have to run on the game server itself.** Any always-on computer that can reach your servers
-works.
+#### On Windows
 
-- **Rented or managed game servers** (where you only get a control panel and FTP): run Lighthouse on a
-  home PC, a small VPS or any other machine. Nothing needs to be installed on the game server.
-- **Your own server or a dedicated machine:** run it right there if you like. The dashboard can then
-  also show the game servers' log files.
-- **Firewalls:** Lighthouse needs to reach each server's **query port** over UDP (see
-  [Troubleshooting](#a-server-shows-offline-but-people-are-playing)), and the internet for Discord. It
-  never needs incoming connections; the dashboard only listens on the machine itself unless you change it.
+1. Download the installer:
+   [**install-windows.ps1**](https://github.com/Hailey-Ross/hails.Lighthouse/releases/download/stable/install-windows.ps1)
+   (it's small; your browser may ask whether to keep it: choose **Keep**).
+2. Open your **Downloads** folder, **right-click** `install-windows.ps1` and choose
+   **Run with PowerShell**.
+   - Windows asks *"Do you want to allow this app to make changes?"*: click **Yes**. (Lighthouse needs
+     this once, to start by itself with Windows.)
+   - If a blue or black window asks about an *"Execution Policy"*, type `Y` and press **Enter**.
+   - If nothing happens: right-click the file, choose **Properties**, tick **Unblock** at the bottom,
+     click **OK**, and try again.
+3. A window opens and asks you a few questions. Go on to [step 3](#3-answer-the-setup-questions).
 
-## Everyday commands
+Lighthouse goes into `C:\Lighthouse` and runs quietly in the background from then on, also after
+the computer restarts. There's no window to keep open.
 
-| Command | What it does |
-|---|---|
-| `lighthouse setup` | First-time setup (or start over). |
-| `lighthouse run` | Start Lighthouse. Stop it with Ctrl+C. |
-| `lighthouse check-config` | Check `lighthouse.toml` for mistakes. |
-| `lighthouse query <game> <address> [port]` | Ask one server for its status right now. Great for finding the right port. |
-| `lighthouse games [name]` | List the supported games and their usual ports. |
-| `lighthouse bot-mode per-game` / `mega` | Switch between one bot per game and one bot for all games (walks you through any new bots). |
-| `lighthouse set-password` | Turn on the dashboard, or reset the superadmin password. |
-| `lighthouse unblock <address>` | Lift a dashboard block (for example if you locked yourself out). |
-| `lighthouse update` | Check for and install a new version. |
-| `lighthouse --version` | Show the version, build and channel. |
+#### On Linux
 
-Everything lives in `lighthouse.toml` next to the program, alongside a small database
-(`lighthouse.db`) and `lighthouse.state.json`. Back these up to keep your settings, history and posts.
-[`lighthouse.example.toml`](lighthouse.example.toml) explains every setting.
+Open a terminal on that machine (or connect to it over SSH) and run these two lines:
 
-## The web dashboard
+```sh
+curl -fsSLO https://github.com/Hailey-Ross/hails.Lighthouse/releases/download/stable/install-linux.sh
+sudo sh install-linux.sh
+```
 
-Off unless you turn it on (in the setup, or later with `lighthouse set-password`). Open
-<http://127.0.0.1:8650> on the machine running Lighthouse and sign in.
+It asks a few questions (next step), then runs Lighthouse as a background service that starts by
+itself at boot.
 
-- **Servers** at a glance, **Uptime** (history and outages), **Reports** (players over time, peaks,
-  player-hours, when people play, CSV export), **Controls** (start, stop, restart, messages),
-  **Moderation** (who's online, kicks, bans, and txAdmin/game bans, warnings and restarts),
-  **Logs** (log files and a live console), **Setup** (add and change game servers and Discord bots;
-  a bot needs only its token: the page shows its invite link and lets you pick its channel), **Users**
-  and **Security**. Controls, moderation and the
-  live console need a game API or mod: see [docs/mods.md](docs/mods.md).
-- **Admins:** the superadmin from the setup invites others from the Users page and ticks exactly
-  which pages and servers each one can see. Sign-up only works with an invite link; addresses that
-  guess invite links are blocked for longer each time.
-- **Reaching it from elsewhere:** put it behind a reverse proxy with HTTPS (Caddy or nginx), set
-  `bind` to the address the proxy connects to, and turn on `trust_proxy` so blocks apply to visitors
-  rather than to the proxy.
-- Four colour themes, and it works on phones.
+### 3. Answer the setup questions
+
+The installer asks you, one at a time. Type your answer and press **Enter**; where you get a list,
+use the **arrow keys** and press **Enter**.
+
+- **Quick or full setup?** The *quick setup* only asks for a dashboard password and you do the rest
+  in your browser (step 4). The *full setup* asks everything here. Either is fine; pick quick if
+  you're unsure.
+- **Your game servers** (full setup): start typing the game's name and pick it from the list, then
+  enter the **address**, the **port** and a **name** to show in Discord. Lighthouse checks the server
+  answers before it moves on. If it doesn't, see
+  [A server shows offline](#a-server-shows-offline-but-people-are-playing).
+- **Your Discord bot** (full setup): paste the **token** from step 1 (right-click to paste in the
+  window). Lighthouse gives you an **invite link**: open it in your browser, pick your Discord server
+  and click **Authorize**. Then choose the **channel** for the status post.
+- **The dashboard**: answer **yes**, then choose a **username and password**. You'll use them to sign
+  in to the dashboard.
+- **Updates**: say yes. Lighthouse then keeps itself up to date.
+
+When it says **All done**, Lighthouse is running. Within a minute the status post appears in your
+channel.
+
+### 4. Open the dashboard
+
+On the computer running Lighthouse, open <http://127.0.0.1:8650> in your browser (the Windows
+installer opens it for you) and sign in with the username and password from step 3.
+
+- **Did the quick setup?** Go to **Setup** (in the menu on the left):
+  - **Add a server** for each game server: pick the game, enter the address and port, click **Test**,
+    then **Save**.
+  - **Add a bot**: paste the token from step 1 and click **Continue**. Open the **invite link** it
+    shows, add the bot to your Discord server, come back, click **Refresh**, pick the channel and
+    click **Save the bot**.
+- **Servers** shows everything at a glance. **Uptime** and **Reports** show history and when people
+  play.
+- **Users**: invite other admins with a link and tick exactly what each one may see and do.
+
+The dashboard only opens on the computer running Lighthouse. On a Linux server, the installer shows
+a one-line command that brings it to your own computer.
+
+## Extras for your games
+
+Out of the box Lighthouse shows who's online and how long each server has been up. Each game can
+give it more, such as **real uptime**, **player names**, a **live console**, and **buttons to restart,
+message, kick and ban**:
+
+| Game | What to set up | Gives you |
+|---|---|---|
+| 7 Days to Die | Its built-in web dashboard (two settings) | Real uptime, player names, live console, all buttons |
+| Project Zomboid | RCON (two settings) | Reliable player list, all buttons |
+| VEIN | Its HTTP API (one setting) | Real uptime, player names |
+| FiveM / RedM | The Lighthouse resource (a folder you copy) | Real uptime, txAdmin bans and restarts, bans from the dashboard, buttons |
+
+Step-by-step for each: **[Game extras guide](docs/mods.md)**. The FiveM/RedM resource and the
+Project Zomboid mod are ready to download on the
+[releases page](https://github.com/Hailey-Ross/hails.Lighthouse/releases/latest).
 
 ## Updates
 
-Lighthouse checks this project's releases once a day. With `auto_install = true` under `[updates]` it
-installs a new build and restarts by itself; otherwise it mentions it in the log, and
-`lighthouse update` installs it. Pick a channel:
+If you said yes to updates during setup, there's nothing to do: Lighthouse checks once a day, installs
+new versions by itself and restarts in a few seconds. Your settings and history stay.
 
-- **stable** (default): the latest working build.
-- **bleeding-edge**: every change as it lands; it may break.
+**Updating an older install by hand** (for example one where updates were turned off): run the
+installer from [step 2](#2-install-lighthouse) again. It sees Lighthouse is already there, backs up
+your settings and data, swaps in the new version, checks everything came through unchanged, and
+starts it again. Nothing else changes.
 
-### Updating an older install
+Prefer to try new features early? Lighthouse has two channels: **stable** (the default, tested) and
+**bleeding-edge** (every change as soon as it's made; may break). Switch with `channel` under
+`[updates]` in the settings file.
 
-For an install that can't update itself (an old build, or update checks turned off), each release
-carries an updater. It first updates itself, then replaces only the program: settings, the
-database and every other file of the install are backed up, checked byte for byte afterwards, and
-left as they were. Add `-EnableAutoUpdates` / `--enable-auto-updates` to also turn on automatic
-updates in `lighthouse.toml`.
-
-Windows (PowerShell; finds the install by itself, or pass `-Folder`):
-
-```powershell
-Invoke-WebRequest https://github.com/Hailey-Ross/hails.Lighthouse/releases/download/stable/update-windows.ps1 -OutFile update-windows.ps1
-powershell -ExecutionPolicy Bypass -File update-windows.ps1
-```
-
-Linux (the service install in `/var/lib/lighthouse`; others: `--binary` and `--data`):
-
-```sh
-curl -fsSLO https://github.com/Hailey-Ross/hails.Lighthouse/releases/download/stable/update-linux.sh
-sudo sh update-linux.sh
-```
-
-The previous program is kept next to the new one (`.old`), and the backups go to `backups/` in the
-install folder (the newest three are kept).
-
-## Troubleshooting
+## Something isn't working
 
 #### A server shows offline but people are playing
 
-Lighthouse is asking the wrong port, or a firewall is blocking it. Many games answer status questions
-on a **query port** that differs from the port players join:
+Lighthouse is asking the wrong port, or a firewall is in the way. Some games answer status questions
+on a different port from the one players join:
 
-| Game | Query port |
+| Game | Port Lighthouse asks |
 |---|---|
-| 7 Days to Die | the game port (default 26900) |
-| Project Zomboid (B42) | the game port (`DefaultPort`, default 16261) |
-| VEIN | usually the game port **+ 1** (or `-QueryPort`, default 27015) |
-| Others | see [docs/games.md](docs/games.md); often the game port, game port + 1, or 27015 |
+| 7 Days to Die | the game port (usually 26900) |
+| Project Zomboid | the game port (usually 16261) |
+| VEIN | the game port **+ 1** (e.g. 7778 for a server on 7777) |
+| Others | see the [game list](docs/games.md); often the game port, game port + 1, or 27015 |
 
-Try it: `lighthouse query pz 203.0.113.10 16261`. When you find the port that answers, put it in
-`lighthouse.toml` as `query_port = …` on that server. Rented servers often list the query port in the
-control panel's port section.
+Your game host's control panel often lists a **query port**: if it does, that's the one. On the
+dashboard, open **Setup**, click the server, put it in **Status port**, click **Test**, then **Save**.
 
 #### The bot doesn't post anything
 
-- Run `lighthouse check-config`, then look at the log `lighthouse run` prints.
-- "Cannot post in channel": give the bot **View Channel**, **Send Messages** and **Read Message
-  History** in that channel (channel settings → Permissions).
-- "Discord rejected the token": reset the token on the bot's page in the Developer Portal and paste the
-  new one (run `lighthouse setup` again, or edit `lighthouse.toml`).
+- Check the bot is in your Discord server and may post in that channel: in Discord, right-click the
+  channel → **Edit Channel** → **Permissions** → add the bot and allow **View Channel**,
+  **Send Messages** and **Read Message History**.
+- Look at the log: on Windows `C:\Lighthouse\lighthouse.log` (open it with Notepad); on Linux
+  `journalctl -u lighthouse -n 50`. It says in plain words what's wrong.
+- "Discord rejected the token": reset the token in the Developer Portal (step 1) and add the bot again
+  on the dashboard's **Setup** page.
 
 #### I can't open the dashboard
 
-- Is it on? `lighthouse check-config` says "dashboard on" or "off".
-- It only listens on the machine itself (`127.0.0.1:8650`) by default. From another computer, use a
-  reverse proxy (see [The web dashboard](#the-web-dashboard)).
-- "Access blocked": that address guessed invite links. Run `lighthouse unblock <address>` on the
-  machine, or lift it on the Security page.
+- Open it on the computer running Lighthouse: <http://127.0.0.1:8650>.
+- "Access blocked": that address tried wrong invite links too often. On the computer running
+  Lighthouse, open a terminal in its folder and run `lighthouse unblock <the address>`.
+- Forgot the password? In the same place run `lighthouse set-password` and choose a new one.
+
+#### Something else
+
+Open an [issue](https://github.com/Hailey-Ross/hails.Lighthouse/issues) and include the last lines
+of the log.
 
 ## Supported games
 
-- **Full support** (tested on live servers): **7 Days to Die**, **Project Zomboid** (Build 42) and
-  **VEIN**.
-- **Experimental:** 100+ games that answer the Steam server query (Valheim, Rust, ARK, Counter-Strike 2,
-  Conan Exiles, DayZ, Enshrouded, V Rising and many more), plus **Minecraft** Java and Bedrock, and
-  **FiveM/RedM**. These should work; their default ports haven't all been checked yet.
+- **Fully supported** (tested on live servers): **7 Days to Die**, **Project Zomboid** (Build 42),
+  **VEIN**, **FiveM** and **RedM**.
+- **Experimental** (should work, not every default checked): 100+ more games, including Valheim, Rust,
+  ARK, Counter-Strike 2, Conan Exiles, DayZ, Enshrouded, V Rising and **Minecraft** (Java and Bedrock).
 
-Full list with ports: [docs/games.md](docs/games.md).
+Full list with their usual ports: [docs/games.md](docs/games.md).
 
-What each game shows beyond name, players and uptime:
+What each game shows besides name, players and uptime:
 
 | Game | Extra details |
 |---|---|
-| 7 Days to Die | In-game day and time, blood moon countdown. With its web API: real uptime, player names and pings, the exact blood moon day (also on random ranges), a live console, and server controls. |
-| Project Zomboid | Player names. With RCON: a player list that stays right on Build 42, and server controls. |
-| VEIN | With its HTTP API: real uptime and player names. |
-| FiveM / RedM | Server name and description, game type, version, player names (unless hidden). With the Lighthouse resource: real uptime, txAdmin events, the next scheduled restart, bans from the dashboard, controls. |
-| Minecraft | Message of the day, version, some player names; Bedrock also the game mode. |
-| Rust | Time since the last wipe. |
-| DayZ | In-game time. |
+| 7 Days to Die | In-game day and time, blood moon countdown; with its web dashboard on, player names and the exact blood moon day |
+| Project Zomboid | Player names |
+| VEIN | With its HTTP API: player names |
+| FiveM / RedM | Server name and description, game type, version, player names; with the resource, the next scheduled restart |
+| Minecraft | Message of the day, version, some player names |
+| Rust | Time since the last wipe |
+| DayZ | In-game time |
 
-7 Days to Die and VEIN don't share player names through the server query, so without their APIs the
-cards show player counts only. The setup asks about each API; they can also be added to the config
-later (see `native` in [lighthouse.example.toml](lighthouse.example.toml)). Step-by-step for every
-game, including the FiveM/RedM resource and the 7 Days to Die mod: [docs/mods.md](docs/mods.md).
+## Reference
+
+### Where Lighthouse keeps things
+
+Everything is in one folder (`C:\Lighthouse` on Windows, `/var/lib/lighthouse` on Linux):
+
+| File | What it is |
+|---|---|
+| `lighthouse.toml` | Your settings. The dashboard's **Setup** page edits it for you; every setting is explained in [lighthouse.example.toml](lighthouse.example.toml). |
+| `lighthouse.db` | History, dashboard users and bans. |
+| `lighthouse.state.json` | Which Discord posts Lighthouse keeps up to date. |
+| `lighthouse.log` | What it's doing (Windows; on Linux: `journalctl -u lighthouse`). |
+
+Back up the folder to keep everything.
+
+### Commands
+
+For people comfortable with a terminal. Run them in Lighthouse's folder (on Windows `.\lighthouse`).
+
+| Command | What it does |
+|---|---|
+| `lighthouse setup` | The setup questions (first time, or to start over). |
+| `lighthouse run` | Start Lighthouse in this window (stop with Ctrl+C). The installers run it in the background for you. |
+| `lighthouse check-config` | Check the settings file for mistakes. |
+| `lighthouse query <game> <address> [port]` | Ask one server for its status right now; handy for finding the right port. |
+| `lighthouse games [name]` | List supported games and their usual ports. |
+| `lighthouse control <server> <action>` | start, stop, restart, say, kick or ban, from the command line. |
+| `lighthouse bot-mode per-game` / `mega` | One bot per game, or one bot for everything. |
+| `lighthouse set-password` | Turn on the dashboard or reset the main admin's password. |
+| `lighthouse unblock <address>` | Lift a dashboard block. |
+| `lighthouse update` | Check for and install a new version now. |
+| `lighthouse --version` | Show the version. |
+
+### Running it yourself
+
+Rather not use the installers? Download the program for your system from the
+[releases page](https://github.com/Hailey-Ross/hails.Lighthouse/releases/latest)
+(`lighthouse-x86_64-pc-windows-msvc.exe` → rename to `lighthouse.exe`; on Linux
+`lighthouse-x86_64-unknown-linux-gnu` → `lighthouse`, then `chmod +x lighthouse`), put it in a folder
+of its own, run `lighthouse setup`, then `lighthouse run`. A systemd service file is in
+[deploy/systemd](deploy/systemd/lighthouse.service), and there's a [Dockerfile](Dockerfile).
+
+### Reaching the dashboard from other computers
+
+Put it behind a reverse proxy with HTTPS (Caddy or nginx), set `bind` under `[dashboard]` to the
+address the proxy connects to, and set `trust_proxy = true` so blocks apply to visitors rather than
+the proxy.
 
 ## For developers
 
@@ -219,16 +281,16 @@ when the version in `Cargo.toml` is new; it needs a section in [CHANGELOG.md](CH
 
 | Path | What |
 |---|---|
-| `crates/lighthouse` | The `lighthouse` program: setup, updates, command line |
-| `crates/lighthouse-core` | Shared types: server status, config, the game catalogue |
-| `crates/lighthouse-games` | Game adapters and the Steam query, RCON, Minecraft and FiveM clients |
-| `crates/lighthouse-discord` | Polling, status cards and the Discord bots |
+| `crates/lighthouse` | The `lighthouse` program: setup, updates, command line, heartbeat listener |
+| `crates/lighthouse-core` | Shared types: server status, config, the game catalogue, controls |
+| `crates/lighthouse-games` | Game adapters: Steam query, RCON, telnet, Minecraft, FiveM, game APIs |
+| `crates/lighthouse-discord` | Polling, status cards, slash commands and the Discord bots |
 | `crates/lighthouse-dashboard` | Web dashboard; each page is a module in `src/modules/` |
-| `crates/lighthouse-store` | SQLite storage: users, invites, sessions, history, blocks |
-| `mods/` | The FiveM/RedM resource, the 7 Days to Die mod and the Project Zomboid mod ([setup](docs/mods.md)) |
-| `docs/` | [Architecture](docs/architecture.md), [games](docs/games.md), [game APIs and mods](docs/mods.md), [heartbeat format](docs/heartbeat.md) |
+| `crates/lighthouse-store` | SQLite storage: users, invites, sessions, history, events, bans |
+| `mods/` | The FiveM/RedM resource, the 7 Days to Die mod and the Project Zomboid mod ([guide](docs/mods.md)) |
+| `deploy/` | Installers, updaters, systemd unit |
+| `docs/` | [Architecture](docs/architecture.md), [games](docs/games.md), [game extras](docs/mods.md), [heartbeat format](docs/heartbeat.md) |
 | `assets/brand/` | Icon, logo, banner and animated icon (`tools/brand/render_brand.py` renders them) |
-| `deploy/`, `Dockerfile` | systemd unit and container image |
 
 ## Licence
 
