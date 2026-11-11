@@ -844,7 +844,7 @@ dependencies = [
 
 [[package]]
 name = "lighthouse"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "axum",
@@ -869,7 +869,7 @@ dependencies = [
 
 [[package]]
 name = "lighthouse-core"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "serde",
@@ -880,7 +880,7 @@ dependencies = [
 
 [[package]]
 name = "lighthouse-dashboard"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "axum",
  "lighthouse-core",
@@ -898,7 +898,7 @@ dependencies = [
 
 [[package]]
 name = "lighthouse-discord"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "lighthouse-core",
  "lighthouse-games",
@@ -915,7 +915,7 @@ dependencies = [
 
 [[package]]
 name = "lighthouse-games"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "lighthouse-core",
@@ -929,7 +929,7 @@ dependencies = [
 
 [[package]]
 name = "lighthouse-store"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "argon2",
  "getrandom 0.2.17",

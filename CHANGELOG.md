@@ -4,7 +4,7 @@ Stable releases have a version number, raised only for notable changes. Smaller 
 the number and get a new build number. Each version needs its own section here before it can be
 released.
 
-## Unreleased
+## 0.1.2
 
 - One-file installers for Windows and Linux, attached to every release: they download Lighthouse,
   ask the setup questions, keep it running in the background and start it with the computer.
