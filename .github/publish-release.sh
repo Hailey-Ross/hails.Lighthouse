@@ -13,7 +13,9 @@ gh_release() {
   fi
 }
 
-cp lighthouse.example.toml deploy/systemd/lighthouse.service deploy/update/update-windows.ps1 deploy/update/update-linux.sh \n  deploy/install/install-windows.ps1 deploy/install/install-linux.sh dist/
+cp lighthouse.example.toml deploy/systemd/lighthouse.service \
+  deploy/update/update-windows.ps1 deploy/update/update-linux.sh \
+  deploy/install/install-windows.ps1 deploy/install/install-linux.sh dist/
 # Game mods, zipped as they go on the server: the folder inside each zip is the one to copy.
 (cd mods/fivem && zip -qr ../../dist/lighthouse-fivem-redm.zip lighthouse)
 (cd mods/zomboid/Contents/mods && zip -qr ../../../../dist/lighthouse-zomboid-mod.zip Lighthouse)
@@ -29,7 +31,8 @@ else
   version=$(git ls-remote --tags origin 'refs/tags/v*' | sed 's#.*refs/tags/v##' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || true)
 fi
 
-binaries=$(ls lighthouse-* | grep -v '\.toml$' || true)
+# The programs only (the mod zips also start with "lighthouse-").
+binaries=$(ls lighthouse-* | grep -vE '\.(toml|zip)$' || true)
 # The updaters are listed too: they check the copies they fetch of themselves against this file.
 extras="install-windows.ps1 install-linux.sh update-windows.ps1 update-linux.sh lighthouse-fivem-redm.zip lighthouse-zomboid-mod.zip"
 sha256sum $binaries $extras > SHA256SUMS
